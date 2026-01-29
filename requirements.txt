@@ -1,3 +1,13 @@
 customtkinter
 SpeechRecognition
 pyaudio
+numpy
+vosk
+sounddevice
+noisereduce
+webrtcvad-wheels
+pydub
+soundfile
+openai-whisper
+requests
+tqdm
