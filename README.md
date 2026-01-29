@@ -2,7 +2,6 @@
 
 A high-performance real-time voice transcription application that combines **Vosk** (for low-latency streaming) and **OpenAI Whisper** (for high-accuracy correction). Features a modern dark-mode UI built with `customtkinter`.
 
-![Screenshot](screenshot.png)
 
 ## Features
 
