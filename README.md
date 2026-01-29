@@ -68,6 +68,7 @@ python main.py
 4. Speak naturally - instant text appears (gray), then refines to high accuracy (white)
 5. Export your transcript when done
 
+<<<<<<< HEAD
 ### Note Summarization
 1. Click **"Note Summarization"**
 2. Load a transcript (.txt) or PowerPoint (.pptx)
@@ -165,3 +166,6 @@ If you find NoteForge useful, please consider giving it a star on GitHub!
 ---
 
 **Built with ❤️ for students and professionals who value organized, accessible knowledge**
+=======
+MIT License
+>>>>>>> a547eedc0c46e73dd21ba88bf66e9bc794ec3f64
