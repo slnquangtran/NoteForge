@@ -10,7 +10,7 @@ import whisper
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 
 DEFAULT_SETTINGS = {
-    "whisper_model_size": "medium",
+    "whisper_model_size": "large",
 }
 
 def load_settings():
