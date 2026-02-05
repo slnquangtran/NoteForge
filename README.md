@@ -44,17 +44,10 @@ pip install -r requirements.txt
 
 
 
-### 3. Download Models
-Run the helper script to download the Vosk model (~50MB):
-```bash
-python tools/download_models.py
-```
-
-The Whisper model will download automatically on first use.
-
-## Usage
-
-### Launch NoteForge
+### 3. Launch NoteForge
 ```bash
 python main.py
 ```
+*Models will be downloaded automatically on the first run.*
+
+
