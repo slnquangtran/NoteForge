@@ -40,37 +40,75 @@ class StudyAssistantGUI(ctk.CTkToplevel):
 
     def create_widgets(self):
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(1, weight=1) # Allow notes_box to expand
 
-        # --- Header ---
-        header = ctk.CTkFrame(self)
-        header.grid(row=0, column=0, padx=20, pady=20, sticky="ew")
+        # --- Header Frame ---
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew") # Adjusted pady
+        header.grid_columnconfigure(0, weight=1) # Title label expands
+        header.grid_columnconfigure(1, weight=0) # Button doesn't expand
         
-        ctk.CTkLabel(header, text="📝 Note Summarization", font=("Segoe UI", 20, "bold")).pack(side="left", padx=20, pady=10)
+        ctk.CTkLabel(header, text="📝 Note Summarization", font=("Segoe UI", 20, "bold")).grid(row=0, column=0, padx=0, pady=0, sticky="w")
         
-        self.btn_load = ctk.CTkButton(header, text="📂 Load File (TXT/PPTX)", command=self.load_file)
-        self.btn_load.pack(side="right", padx=20)
+        self.btn_load = ctk.CTkButton(
+            header, 
+            text="📂 Load File (TXT/PPTX)", 
+            command=self.load_file,
+            font=("Segoe UI", 14),
+            corner_radius=8,
+            fg_color="#3B8ED0", # Consistent blue
+            hover_color="#42A5F5"
+        )
+        self.btn_load.grid(row=0, column=1, padx=0, pady=0, sticky="e")
 
-        # --- Main Content Area ---
-        self.notes_box = ctk.CTkTextbox(self, font=("Consolas", 12), wrap="word")
-        self.notes_box.grid(row=1, column=0, padx=20, pady=0, sticky="nsew")
+        # --- Main Content Area (Notes Textbox) ---
+        self.notes_box = ctk.CTkTextbox(
+            self, 
+            font=("Segoe UI", 14), # Consistent font
+            wrap="word",
+            corner_radius=8,
+            border_width=2,
+            border_color="#333333"
+        )
+        self.notes_box.grid(row=1, column=0, padx=20, pady=10, sticky="nsew") # Adjusted pady
 
-        # --- Footer ---
-        footer = ctk.CTkFrame(self, height=60)
-        footer.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
+        # --- Footer Frame ---
+        footer = ctk.CTkFrame(self, fg_color="transparent")
+        footer.grid(row=2, column=0, padx=20, pady=(10, 20), sticky="ew") # Adjusted pady
+        footer.grid_columnconfigure(0, weight=0) # Progress bar
+        footer.grid_columnconfigure(1, weight=1) # Status label (expands)
+        footer.grid_columnconfigure(2, weight=0) # Process button
+        footer.grid_columnconfigure(3, weight=0) # Export button
         
-        self.progress_bar = ctk.CTkProgressBar(footer, width=200)
-        self.progress_bar.pack(side="left", padx=10, pady=10)
+        self.progress_bar = ctk.CTkProgressBar(footer, width=200, height=10, corner_radius=5, fg_color="#333333", progress_color="#00FFF5")
+        self.progress_bar.grid(row=0, column=0, padx=(0, 15), pady=0, sticky="w")
         self.progress_bar.set(0)
         
-        self.lbl_status = ctk.CTkLabel(footer, textvariable=self.status_var)
-        self.lbl_status.pack(side="left", padx=10)
+        self.lbl_status = ctk.CTkLabel(footer, textvariable=self.status_var, font=("Segoe UI", 12), text_color="gray")
+        self.lbl_status.grid(row=0, column=1, padx=0, pady=0, sticky="w")
         
-        self.btn_process = ctk.CTkButton(footer, text="📝 Generate Lecture Notes", command=self.start_processing, fg_color="#27AE60", hover_color="#229954")
-        self.btn_process.pack(side="right", padx=10, pady=10)
+        self.btn_export = ctk.CTkButton( # Moved export before process for typical flow
+            footer, 
+            text="💾 Export PDF", 
+            command=self.export_pdf, 
+            state="disabled",
+            font=("Segoe UI", 14),
+            corner_radius=8,
+            fg_color="#2196F3", # Consistent blue
+            hover_color="#42A5F5"
+        )
+        self.btn_export.grid(row=0, column=2, padx=(0, 15), pady=0, sticky="e") # Pad to the left
         
-        self.btn_export = ctk.CTkButton(footer, text="💾 Export PDF", command=self.export_pdf, state="disabled")
-        self.btn_export.pack(side="right", padx=10)
+        self.btn_process = ctk.CTkButton(
+            footer, 
+            text="📝 Generate Lecture Notes", 
+            command=self.start_processing, 
+            fg_color="#27AE60", 
+            hover_color="#229954",
+            font=("Segoe UI", 14),
+            corner_radius=8
+        )
+        self.btn_process.grid(row=0, column=3, padx=0, pady=0, sticky="e")
 
         self.loaded_filepath = None
 

@@ -4,10 +4,24 @@ import queue
 import time
 import os
 import json
+import random
 import numpy as np
 import sounddevice as sd
-import pyaudio
-import webrtcvad
+import config_manager
+
+
+# Conditional import for webrtcvad
+webrtcvad_available = False
+try:
+    import webrtcvad
+    webrtcvad_available = True
+except ImportError:
+    print("Warning: webrtcvad not found. VAD functionality will be disabled.")
+    class DummyVad:
+        def is_speech(self, audio_frame, sample_rate):
+            return False # Always return False if VAD is disabled
+    webrtcvad_module = DummyVad() # Use a different name to avoid conflict with actual module
+
 import collections
 from datetime import datetime
 from tkinter import filedialog, messagebox
@@ -23,9 +37,35 @@ try:
 except ImportError:
     whisper = None
 
+class PerformanceMonitor:
+    def __init__(self):
+        self.stats = {
+            'captured': 0,
+            'dropped_capture': 0,
+            'processed_vad': 0,
+            'dropped_vad': 0,
+            'processed_vosk': 0
+        }
+        self.start_time = time.time()
+    
+    def log(self, key):
+        self.stats[key] = self.stats.get(key, 0) + 1
+        
+    def get_fps(self, key):
+        elapsed = time.time() - self.start_time
+        if elapsed < 1: return 0
+        return int(self.stats.get(key, 0) / elapsed)
+
+    def reset(self):
+        self.stats = {k:0 for k in self.stats}
+        self.start_time = time.time()
+
 class HybridTranscriberApp(ctk.CTkToplevel):
     def __init__(self, master=None):
         super().__init__(master)
+        
+        # Performance Monitor
+        self.monitor = PerformanceMonitor()
 
         # --- Window Setup ---
         self.title("NoteForge - Real-Time Transcription")
@@ -36,20 +76,31 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         # --- Configuration ---
         self.SAMPLE_RATE = 16000
         self.FRAME_DURATION_MS = 20
-        self.FRAME_SIZE = int(self.SAMPLE_RATE * self.FRAME_DURATION_MS / 1000)
-        self.VOSK_MODEL_PATH = "model"
-        self.WHISPER_MODEL_SIZE = "base"
+        self.FRAME_SIZE = int(self.SAMPLE_RATE * self.FRAME_DURATION_MS / 1000) # 320 samples for 20ms
+        self.FRAME_BYTES = self.FRAME_SIZE * 2 # 16-bit PCM = 2 bytes per sample -> 640 bytes
+        self.VOSK_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "model")
+        self.WHISPER_MODEL_SIZE = config_manager.get_setting("whisper_model_size")
 
         # --- State ---
         self.is_recording = False
-        self.audio_queue = queue.Queue()       # Raw audio chunks (bytes)
+        self.is_recording = False
+        # --- Dual Queue Architecture ---
+        self.vad_queue = queue.Queue(maxsize=100)      # Fast VAD processing (small buffer)
+        self.vosk_queue = queue.Queue(maxsize=500)     # Slow Vosk processing (buffer for batching)
         self.whisper_queue = queue.Queue()     # Completed sentences (numpy array)
         self.display_queue = queue.Queue()     # UI updates (type, text)
         self.meter_queue = queue.Queue()       # Audio level updates
 
+        self.last_queue_sizes = []
+        self.queue_warning_threshold = 400
+        self.vad_debug = False  # Set to True for debugging
+
         self.vosk_model = None
         self.whisper_model = None
-        self.vad = webrtcvad.Vad(2) # Mode 2: Aggressive
+        if webrtcvad_available:
+            self.vad = webrtcvad.Vad(2) # Mode 2: Aggressive
+        else:
+            self.vad = webrtcvad_module # Use the dummy instance
 
         # Load Vosk Model immediately (fast)
         if vosk and os.path.exists(self.VOSK_MODEL_PATH):
@@ -60,6 +111,7 @@ class HybridTranscriberApp(ctk.CTkToplevel):
 
         # Threads
         self.capture_thread = None
+        self.vad_thread = None
         self.vosk_thread = None
         self.whisper_thread = None
         
@@ -77,60 +129,83 @@ class HybridTranscriberApp(ctk.CTkToplevel):
     def get_available_devices(self):
         self.devices_list = []
         try:
-            p = pyaudio.PyAudio()
-            info = p.get_host_api_info_by_index(0)
-            numdevices = info.get('deviceCount')
-            default_input = p.get_default_input_device_info()['index']
+            # Get default input device index
+            default_input_index = sd.default.device[0] # sd.default.device returns (input_device_index, output_device_index)
             
-            for i in range(0, numdevices):
-                dev = p.get_device_info_by_host_api_device_index(0, i)
-                if dev.get('maxInputChannels') > 0:
-                    name = dev.get('name')
-                    is_def = " (Default)" if i == default_input else ""
+            devices = sd.query_devices()
+            for i, dev in enumerate(devices):
+                if dev['max_input_channels'] > 0:
+                    name = dev['name']
+                    is_def = " (Default)" if i == default_input_index else ""
                     self.devices_list.append((i, f"{i}: {name}{is_def}"))
-            p.terminate()
-        except:
-             self.devices_list = [(None, "Default Device")]
+        except Exception as e:
+            print(f"Error getting audio devices: {e}")
+            self.devices_list = [(None, "Default Device")]
 
     def create_widgets(self):
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(2, weight=1) # Allow textbox to expand
 
-        # 1. Top Controls
-        top_frame = ctk.CTkFrame(self)
-        top_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+        # --- 1. Top Controls Frame (Record Button, Status, Mic Selector) ---
+        top_frame = ctk.CTkFrame(self, fg_color="transparent")
+        top_frame.grid(row=0, column=0, padx=15, pady=15, sticky="ew") # Increased padding
+        top_frame.grid_columnconfigure(0, weight=0) # Record button
+        top_frame.grid_columnconfigure(1, weight=1) # Status label (expands)
+        top_frame.grid_columnconfigure(2, weight=0) # "Mic:" label
+        top_frame.grid_columnconfigure(3, weight=0) # Mic selector menu
         
-        self.record_btn = ctk.CTkButton(top_frame, text="Start Recording", command=self.toggle_recording, font=("Arial", 16, "bold"), height=40)
-        self.record_btn.pack(side="left", padx=10, pady=10)
-        
-        self.status_label = ctk.CTkLabel(top_frame, text="Ready", font=("Arial", 14))
-        self.status_label.pack(side="left", padx=10)
+        # Record Button
+        self.record_btn = ctk.CTkButton(
+            top_frame, 
+            text="Start Recording", 
+            command=self.toggle_recording, 
+            font=("Segoe UI", 16, "bold"), 
+            height=40,
+            corner_radius=8,
+            fg_color="#2CC985", # Green for Start
+            hover_color="#36D491"
+        )
+        self.record_btn.grid(row=0, column=0, padx=(0, 20), pady=0, sticky="w") # Pad to the right
+
+        # Status Label
+        self.status_label = ctk.CTkLabel(top_frame, text="Ready", font=("Segoe UI", 14), text_color="gray")
+        self.status_label.grid(row=0, column=1, padx=0, pady=0, sticky="w") # Aligned to left of its column
 
         # Mic Selector
+        mic_label = ctk.CTkLabel(top_frame, text="Mic:", font=("Segoe UI", 14))
+        mic_label.grid(row=0, column=2, padx=(10, 5), pady=0, sticky="e") # Pad to the left for separation
+        
         mic_vals = [x[1] for x in self.devices_list]
-        self.mic_menu = ctk.CTkOptionMenu(top_frame, values=mic_vals, command=self.change_mic, width=250)
+        self.mic_menu = ctk.CTkOptionMenu(top_frame, values=mic_vals, command=self.change_mic, width=200, font=("Segoe UI", 14))
         if mic_vals: self.mic_menu.set(mic_vals[0])
-        self.mic_menu.pack(side="right", padx=10)
-        ctk.CTkLabel(top_frame, text="Mic:").pack(side="right")
+        self.mic_menu.grid(row=0, column=3, padx=(0, 0), pady=0, sticky="e") # Aligned to right of its column
 
-        # 2. Level Meter
-        self.level_bar = ctk.CTkProgressBar(self, height=15)
-        self.level_bar.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+
+        # --- 2. Level Meter ---
+        self.level_bar = ctk.CTkProgressBar(self, height=10, corner_radius=5, fg_color="#333333", progress_color="#00FFF5")
+        self.level_bar.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="ew") # Increased padding
         self.level_bar.set(0)
 
-        # 3. Transcription Area
-        self.textbox = ctk.CTkTextbox(self, font=("Segoe UI", 16), wrap="word", padx=10, pady=10)
-        self.textbox.grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
+        # --- 3. Transcription Area (Textbox) ---
+        self.textbox = ctk.CTkTextbox(self, font=("Segoe UI", 16), wrap="word", padx=10, pady=10, corner_radius=8, border_width=2, border_color="#333333")
+        self.textbox.grid(row=2, column=0, padx=15, pady=0, sticky="nsew") # Increased padding
         self.textbox.tag_config("gray", foreground="gray")
         self.textbox.tag_config("black", foreground="white") # Dark mode white
-        
-        # 4. Bottom Controls
+        self.textbox.configure(state="disabled") # Start disabled
+
+        # --- 4. Bottom Controls Frame ---
         bot_frame = ctk.CTkFrame(self, fg_color="transparent")
-        bot_frame.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
+        bot_frame.grid(row=3, column=0, padx=15, pady=15, sticky="ew") # Increased padding
+        bot_frame.grid_columnconfigure(0, weight=0) # Clear button
+        bot_frame.grid_columnconfigure(1, weight=0) # Save button
+        bot_frame.grid_columnconfigure(2, weight=1) # Mode label (expands)
         
-        ctk.CTkButton(bot_frame, text="Clear", command=self.clear_text, width=80).pack(side="left", padx=5)
-        ctk.CTkButton(bot_frame, text="Save", command=self.save_text, width=80).pack(side="left", padx=5)
-        ctk.CTkLabel(bot_frame, text="Mode: Hybrid (Vosk Real-time -> Whisper Correction)", text_color="gray").pack(side="right", padx=10)
+        # Clear Button
+        ctk.CTkButton(bot_frame, text="Clear", command=self.clear_text, width=100, font=("Segoe UI", 14), corner_radius=8, fg_color="#4CAF50", hover_color="#66BB6A").grid(row=0, column=0, padx=(0,10), pady=0, sticky="w")
+        # Save Button
+        ctk.CTkButton(bot_frame, text="Save", command=self.save_text, width=100, font=("Segoe UI", 14), corner_radius=8, fg_color="#2196F3", hover_color="#42A5F5").grid(row=0, column=1, padx=0, pady=0, sticky="w")
+        # Mode Label
+        ctk.CTkLabel(bot_frame, text="Mode: Hybrid (Vosk Real-time -> Whisper Correction)", font=("Segoe UI", 12), text_color="gray").grid(row=0, column=2, padx=(20,0), pady=0, sticky="e") # Pad to the left
 
     def change_mic(self, choice):
         for idx, name in self.devices_list:
@@ -153,18 +228,50 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         self.record_btn.configure(text="Stop Recording", fg_color="red")
         self.status_label.configure(text="Initializing Whisper...")
         
-        # Clear queues
-        with self.audio_queue.mutex: self.audio_queue.queue.clear()
+        # Clear queues robustly
+        for q in [self.vad_queue, self.vosk_queue]:
+            while not q.empty():
+                try: q.get_nowait()
+                except queue.Empty: break
+            
         with self.whisper_queue.mutex: self.whisper_queue.queue.clear()
+        
+        time.sleep(0.1) # Ensure clean state
 
         # Start Threads
         self.capture_thread = threading.Thread(target=self.audio_capture_loop)
+        self.vad_thread = threading.Thread(target=self.vad_processing_loop)
         self.vosk_thread = threading.Thread(target=self.vosk_processing_loop)
         self.whisper_thread = threading.Thread(target=self.whisper_processing_loop)
         
         self.capture_thread.start()
+        self.vad_thread.start()
         self.vosk_thread.start()
         self.whisper_thread.start()
+        
+        self.monitor_queues()
+
+    def monitor_queues(self):
+        """Monitors queue sizes and warns if near capacity"""
+        if not self.is_recording:
+            return
+
+        # Monitor VAD queue (the entry point bottleneck)
+        vad_qsize = self.vad_queue.qsize()
+        
+        # Track last 10 samples
+        self.last_queue_sizes.append(vad_qsize)
+        if len(self.last_queue_sizes) > 10:
+            self.last_queue_sizes.pop(0)
+        
+        # Warn if queue consistently near capacity
+        if vad_qsize > 80: # 80% of 100
+            avg_size = sum(self.last_queue_sizes) / len(self.last_queue_sizes)
+            if avg_size > 80:
+                 self.display_queue.put(("status", f"System Overloaded! Skipping frames... ({vad_qsize}/100)"))
+        
+        # Schedule next check (1s)
+        self.after(1000, self.monitor_queues)
 
     def stop_recording(self):
         self.is_recording = False
@@ -173,103 +280,194 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         self.level_bar.set(0)
 
     def audio_capture_loop(self):
-        """Captures raw audio from PyAudio"""
+        """Captures raw audio using SoundDevice (Blocking Mode for Stability)"""
         try:
-            p = pyaudio.PyAudio()
-            stream = p.open(format=pyaudio.paInt16,
-                            channels=1,
-                            rate=self.SAMPLE_RATE,
-                            input=True,
-                            input_device_index=self.selected_mic_index,
-                            frames_per_buffer=self.FRAME_SIZE)
-            
-            self.display_queue.put(("status", "Listening..."))
-            
-            while self.is_recording:
-                data = stream.read(self.FRAME_SIZE, exception_on_overflow=False)
-                self.audio_queue.put(data)
+            with sd.InputStream(samplerate=self.SAMPLE_RATE,
+                                blocksize=self.FRAME_SIZE,
+                                device=self.selected_mic_index,
+                                channels=1,
+                                dtype='int16') as stream: # No callback = blocking mode
                 
-                # Update Meter
-                try:
-                    # Simple RMS
-                    audio_np = np.frombuffer(data, dtype=np.int16)
-                    volume = np.linalg.norm(audio_np) / 1000
-                    self.meter_queue.put(min(volume / 50, 1.0))
-                except:
-                    pass
+                self.display_queue.put(("status", "Listening..."))
+                
+                while self.is_recording:
+                    try:
+                        # Blocking read
+                        indata, overflowed = stream.read(self.FRAME_SIZE)
+                        
+                        if overflowed:
+                            # Just log it, don't crash. Blocking mode usually handles this better.
+                            # print("Audio buffer overflow (internal)") 
+                            pass
+                        
+                        frame_bytes = indata.tobytes()
+                        
+                        # --- Phase 1: Stabilization & Backoff ---
+                        self.monitor.log('captured')
+                        q_size = self.vad_queue.qsize()
+                        
+                        if q_size > 60: # 60% full
+                            # Progressive Drop Logic
+                            drop_prob = 0.3 if q_size < 80 else 0.8
+                            if random.random() < drop_prob:
+                                self.monitor.log('dropped_capture')
+                                continue # processing loop is blocking, so just continue to next read
+                        
+                        # Strict VAD frame size validation
+                        if len(frame_bytes) == self.FRAME_BYTES:
+                            try:
+                                self.vad_queue.put_nowait(frame_bytes)
+                            except queue.Full:
+                                # Emergency Clear if totally full
+                                try:
+                                    self.vad_queue.get_nowait() # Make space
+                                    self.vad_queue.put_nowait(frame_bytes) # Push new est
+                                except:
+                                    pass
+                        else:
+                            pass # Drop mismatched frames
 
-            stream.stop_stream()
-            stream.close()
-            p.terminate()
+                        # Update Meter (Optimized: Calculate only if needed or skip occasionally?)
+                        # Calculating RMS every 20ms is fine for numpy
+                        try:
+                             # volume = np.sqrt(np.mean(indata**2)) # Slower
+                             # Fast approximation: max absolute value? or just stride?
+                             # Let's keep RMS but maybe every few frames if needed. For now it's fine.
+                             volume = np.sqrt(np.mean(indata['int16']**2)) if hasattr(indata, 'dtype') else np.sqrt(np.mean(indata**2)) 
+                             # Note: indata from read() is numpy array
+                             self.meter_queue.put(min(volume / 1000.0, 1.0))
+                        except:
+                             pass
+
+                    except Exception as e:
+                        print(f"Read Error: {e}")
+                        break
+                        
         except Exception as e:
             self.display_queue.put(("error", f"Mic Error: {e}"))
             self.stop_recording()
 
+    def vad_processing_loop(self):
+        """Phase 2: VAD Processing Thread
+        Consumes from vad_queue, runs VAD, pushes (frame, is_speech) to vosk_queue.
+        """
+        while self.is_recording or not self.vad_queue.empty():
+            try:
+                data = self.vad_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            try:
+                is_active = self.vad.is_speech(data, self.SAMPLE_RATE)
+            except:
+                is_active = False
+            
+            self.monitor.log('processed_vad')
+
+            # Forward to Vosk Queue
+            # We pass a tuple: (frame_bytes, is_speech_bool)
+            try:
+                self.vosk_queue.put_nowait((data, is_active))
+            except queue.Full:
+                self.monitor.log('dropped_vad')
+                pass # If Vosk is falling behind, we drop VAD-processed frames. 
+                     # This is better than stalling VAD.
+
     def vosk_processing_loop(self):
-        """Processes buffer for Real-time (Vosk) + VAD segmentation"""
+        """Processes buffer for Real-time (Vosk) + Whisper Buffering
+        Consumes from vosk_queue (frame, is_active).
+        Uses Batching for Vosk AcceptWaveform.
+        """
         rec = vosk.KaldiRecognizer(self.vosk_model, self.SAMPLE_RATE)
         
-        # Audio buffer for the current sentence
+        # Audio buffer for the current sentence (Whisper)
         sentence_buffer = collections.deque()
         silence_frames = 0
         is_speech = False
         
-        while self.is_recording or not self.audio_queue.empty():
+        # Batching for Vosk
+        batch_audio = []
+        batch_size_frames = 10 # 200ms
+        
+        while self.is_recording or not self.vosk_queue.empty():
             try:
-                data = self.audio_queue.get(timeout=1)
+                # Fetch tuple
+                data, is_active = self.vosk_queue.get(timeout=0.1)
             except queue.Empty:
+                # Process remaining batch if any
+                if batch_audio:
+                     # (Duplicate logic from below, encapsulated for safety)
+                     pass 
                 continue
 
-            # 1. VAD Check
-            try:
-                is_active = self.vad.is_speech(data, self.SAMPLE_RATE)
-            except:
-                is_active = False # Frame size mismatch safety
+            # --- 1. Vosk Recognition (Batched) ---
+            batch_audio.append(data)
+            self.monitor.log('processed_vosk')
+            
+            if len(batch_audio) >= batch_size_frames:
+                # Process Batch
+                joined = b"".join(batch_audio)
+                if rec.AcceptWaveform(joined):
+                    result = json.loads(rec.Result())
+                    text = result.get("text", "")
+                    if text:
+                        self.display_queue.put(("draft", text))
+                else:
+                    partial = json.loads(rec.PartialResult())
+                    p_text = partial.get("partial", "")
+                    if p_text:
+                        self.display_queue.put(("partial", p_text))
+                
+                batch_audio = [] # Reset
 
-            # 2. Vosk Recognition (Streaming)
-            if rec.AcceptWaveform(data):
-                result = json.loads(rec.Result())
-                text = result.get("text", "")
-                if text:
-                    # Final result from Vosk -> Send to display as "Draft"
-                    # But we actually rely on VAD for true sentence end to trigger Whisper
-                    # So we show this as gray text
-                    self.display_queue.put(("draft", text))
-            else:
-                partial = json.loads(rec.PartialResult())
-                p_text = partial.get("partial", "")
-                if p_text:
-                    self.display_queue.put(("partial", p_text))
+            # --- 2. Buffer Management for Whisper (State Machine) ---
+            # NOTE: We must check 'is_active' for EACH frame. 
+            # Since we pull one by one from queue, we can just run this logic per frame.
+            
+            # Parameters
+            MIN_SILENCE_FRAMES = 25  # 500ms
 
-            # 3. Buffer Management for Whisper
+            if self.vad_debug and self.is_recording and random.random() < 0.05: # Reduce log spam
+                 vad_status = "SPEECH" if is_active else "SILENCE"
+                 print(f"VAD: {vad_status}, Buffer: {len(sentence_buffer)}, Silence: {silence_frames}")
+
             if is_active:
                 if not is_speech:
-                    is_speech = True # Speech started
-                    # Potential logic: Start new buffer, maybe rewind a bit?
+                    # Speech started
+                    is_speech = True
+                    silence_frames = 0
+                    if len(sentence_buffer) > 3:
+                        while len(sentence_buffer) > 3:
+                            sentence_buffer.popleft()
+                
                 silence_frames = 0
                 sentence_buffer.append(data)
-            else:
+            
+            else: # Not active (Silence)
                 if is_speech:
                     silence_frames += 1
-                    sentence_buffer.append(data) # Keep trailing silence
+                    sentence_buffer.append(data)
                     
-                    # Sentence End Detection logic
-                    # 25 frames * 20ms = 500ms silence
-                    if silence_frames > 25: 
-                        is_speech = False
-                        
-                        # Package up for Whisper
+                    if silence_frames > MIN_SILENCE_FRAMES: 
                         full_audio = b"".join(sentence_buffer)
-                        # Only transcribe if decent length (>0.5s)
-                        if len(full_audio) > self.SAMPLE_RATE * 1: # 1 sec bytes (2 bytes per sample)
-                            self.whisper_queue.put(full_audio)
-                            self.display_queue.put(("status", "Improving accuracy..."))
+                        
+                        if len(full_audio) > self.SAMPLE_RATE * 0.5 * 2: 
+                            try:
+                                self.whisper_queue.put_nowait(full_audio)
+                                self.display_queue.put(("status", "Improving accuracy..."))
+                            except queue.Full:
+                                print("Whisper queue full, sentence dropped")
                         
                         sentence_buffer.clear()
+                        is_speech = False
+                        silence_frames = 0
+                        if len(data) > 0:
+                            sentence_buffer.append(data)
+
                 else: 
-                     # Keeping a ring buffer of silence before speech could be good, 
-                     # but for simplicity we ignore pure silence.
-                     pass
+                     sentence_buffer.append(data)
+                     while len(sentence_buffer) > 10:
+                         sentence_buffer.popleft()
 
     def whisper_processing_loop(self):
         """Loads Whisper (once) and processes sentences for accuracy"""
@@ -340,6 +538,11 @@ class HybridTranscriberApp(ctk.CTkToplevel):
                 self.level_bar.set(level)
         except:
             pass
+        
+        # 3. Debug Stats (Console Only)
+        if self.is_recording and random.random() < 0.05: # Log occasionally
+             print(f"FPS: Cap={self.monitor.get_fps('captured')} VAD={self.monitor.get_fps('processed_vad')} Vosk={self.monitor.get_fps('processed_vosk')} | Dropped: Cap={self.monitor.stats['dropped_capture']} VAD={self.monitor.stats['dropped_vad']}")
+             # Reset periodically to keep FPS relevant? Maybe not needed for simple diagnostics.
 
         self.after(50, self.update_ui_loop)
 
