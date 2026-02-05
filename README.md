@@ -42,7 +42,7 @@ cd NoteForge
 pip install -r requirements.txt
 ```
 
-**Note**: For GPU acceleration with Whisper, install [PyTorch](https://pytorch.org/) manually.
+
 
 ### 3. Download Models
 Run the helper script to download the Vosk model (~50MB):
