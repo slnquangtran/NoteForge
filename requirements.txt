@@ -16,3 +16,4 @@ reportlab
 huggingface-hub
 llvmlite==0.42.0
 setuptools-rust
+nltk
