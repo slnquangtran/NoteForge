@@ -60,6 +60,12 @@ export LLVM_CONFIG=$(brew --prefix llvm)/bin/llvm-config
 pip install "llvmlite==0.42.0"
 pip install -r requirements.txt
 ```
+
+#### 🛠️ Fix for `ModuleNotFoundError: No module named 'whisper'`
+If you see this error even after installing requirements:
+1. **Uninstall duplicates**: `pip uninstall whisper` (this is a different package)
+2. **Reinstall correct package**: `pip install openai-whisper`
+3. **Check environment**: Ensure you are running `python` from the same environment where you ran `pip install`.
 *NoteForge v1.1.0 pins `llvmlite==0.42.0` and `numpy<2.0.0` which officially support Python 3.12.*
 
 ### 4. Hardware Acceleration (Optional but Recommended)

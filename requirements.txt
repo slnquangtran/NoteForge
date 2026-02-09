@@ -1,6 +1,6 @@
 customtkinter
 sounddevice
-numpy
+numpy<2.0.0
 vosk==0.3.44
 openai-whisper
 webrtcvad-wheels
@@ -15,4 +15,4 @@ python-pptx
 reportlab
 huggingface-hub
 llvmlite==0.42.0
-numpy<2.0.0
+setuptools-rust

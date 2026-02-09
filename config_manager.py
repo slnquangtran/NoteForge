@@ -5,12 +5,16 @@ import platform
 import subprocess
 import requests
 import zipfile
-import whisper
+try:
+    import whisper
+except ImportError:
+    # We'll handle this in the app if it fails, but for now we need a placeholder or just re-raise with better msg
+    whisper = None
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 
 DEFAULT_SETTINGS = {
-    "whisper_model_size": "large",
+    "whisper_model_size": "base",
     "bart_model_name": "facebook/bart-large-cnn",
 }
 
@@ -232,6 +236,8 @@ def download_models(progress_callback=None):
             progress_callback(f"Downloading Whisper model '{current_whisper_size}'...", 0.6)
         try:
             # whisper.load_model automatically downloads if not present
+            if whisper is None:
+                raise ImportError("The 'whisper' module is not installed. Please run 'pip install openai-whisper'.")
             whisper.load_model(current_whisper_size, download_root=whisper_cache_dir)
             print(f"Whisper model '{current_whisper_size}' downloaded successfully.")
             print(f"DEBUG: Contents of Whisper cache directory '{whisper_cache_dir}' after download: {os.listdir(whisper_cache_dir)}")
