@@ -3,6 +3,7 @@
 ## [1.1.0] - 2026-02-09
 
 ### ✨ New Features
+- **AI-Powered Note Summarization**: Integrated **BART (Large-CNN)** model for semantic topic extraction and automatic summarization of lecture notes.
 - **Modern Premium UI**: Implemented a card-based glassmorphism layout with high-radius corners (25px) and a curated dark-mode palette (`#312C51`, `#48426D`, `#F0C38E`).
 - **Automatic Session Export**: Every recording session now automatically saves:
     - High-quality audio: `recordings/recording_YYYYMMDD_HHMMSS.wav`
