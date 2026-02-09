@@ -1,17 +1,14 @@
 customtkinter
 sounddevice
 numpy
-vosk
+vosk==0.3.44
 openai-whisper
 webrtcvad-wheels
 Pillow
-transformers
-torch --index-url https://download.pytorch.org/whl/cu118
-sentencepiece
-psutil
 transformers>=4.30.0
 torch>=2.0.0
 sentencepiece
+psutil
 tqdm
 requests
 python-pptx
