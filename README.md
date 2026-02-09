@@ -48,8 +48,15 @@ pip install -r requirements.txt
 ### 3. Prerequisites for macOS (IMPORTANT)
 If you encounter **"Failed to build wheel"** or **"PortAudio not found"** errors on Mac, follow these steps:
 1.  **Install Homebrew**: [/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"](https://brew.sh)
-2.  **Install PortAudio**: `brew install portaudio`
+2.  **Install System Deps**: `brew install portaudio llvm`
 3.  **Install Xcode Tools**: `xcode-select --install`
+
+#### 🛠️ Fix for `llvmlite` Build Error
+If you see `TypeError: spawn() got an unexpected keyword argument 'dry_run'`, set the following environment variable before installing:
+```bash
+export LLVM_CONFIG=$(brew --prefix llvm)/bin/llvm-config
+pip install -r requirements.txt
+```
 
 ### 4. Hardware Acceleration (Optional but Recommended)
 - **Windows (NVIDIA)**: Automatically uses CUDA if available.

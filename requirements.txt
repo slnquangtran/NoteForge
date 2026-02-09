@@ -14,3 +14,4 @@ requests
 python-pptx
 reportlab
 huggingface-hub
+llvmlite>=0.40.0
