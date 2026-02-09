@@ -51,12 +51,16 @@ If you encounter **"Failed to build wheel"** or **"PortAudio not found"** errors
 2.  **Install System Deps**: `brew install portaudio llvm`
 3.  **Install Xcode Tools**: `xcode-select --install`
 
-#### 🛠️ Fix for `llvmlite` Build Error
-If you see `TypeError: spawn() got an unexpected keyword argument 'dry_run'`, set the following environment variable before installing:
+#### 🛠️ Fix for `llvmlite` / `numba` Build Error
+If you are on **Python 3.12** and see `TypeError: spawn() got an unexpected keyword argument 'dry_run'`, follow these steps:
+1.  **Ensure LLVM is installed**: `brew install llvm`
+2.  **Use the correct env var**:
 ```bash
 export LLVM_CONFIG=$(brew --prefix llvm)/bin/llvm-config
+pip install "llvmlite==0.42.0"
 pip install -r requirements.txt
 ```
+*NoteForge v1.1.0 pins `llvmlite==0.42.0` and `numpy<2.0.0` which officially support Python 3.12.*
 
 ### 4. Hardware Acceleration (Optional but Recommended)
 - **Windows (NVIDIA)**: Automatically uses CUDA if available.
