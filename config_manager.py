@@ -72,12 +72,8 @@ def delete_models(whisper_model_size_to_delete=None):
     success_whisper = False
 
     # 1. Delete Vosk model (project root model directory)
-    # The Vosk model directory is two levels up from NoteForge/NoteForge
-    # __file__ is NoteForge/NoteForge/config_manager.py
-    # os.path.dirname(__file__) is NoteForge/NoteForge
-    # os.path.dirname(os.path.dirname(__file__)) is NoteForge
-    # os.path.dirname(os.path.dirname(os.path.dirname(__file__))) is Exp (project root)
-    vosk_model_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "model")
+    # Use the directory containing this script as the project root
+    vosk_model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model")
     if os.path.exists(vosk_model_dir):
         try:
             shutil.rmtree(vosk_model_dir)
@@ -140,8 +136,8 @@ def download_models(progress_callback=None):
     """
     
     # 1. Vosk Model Download
-    # The Vosk model directory is two levels up from NoteForge/NoteForge
-    vosk_model_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "model")
+    # Use the directory containing this script as the project root
+    vosk_model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model")
     VOSK_MODEL_NAME = "vosk-model-en-us-0.22"
     VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
 
@@ -287,7 +283,7 @@ def clear_all_models():
     """
     print("Attempting to clear all models...")
     # Delete Vosk model (all versions if multiple existed, though currently only one is managed)
-    vosk_model_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "model")
+    vosk_model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model")
     if os.path.exists(vosk_model_dir):
         try:
             shutil.rmtree(vosk_model_dir)
