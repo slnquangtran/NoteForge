@@ -45,11 +45,17 @@ pip install -r requirements.txt
 ```
 *Note: macOS users are automatically pinned to `vosk==0.3.44` for system stability.*
 
-### 3. Hardware Acceleration (Optional but Recommended)
+### 3. Prerequisites for macOS (IMPORTANT)
+If you encounter **"Failed to build wheel"** or **"PortAudio not found"** errors on Mac, follow these steps:
+1.  **Install Homebrew**: [/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"](https://brew.sh)
+2.  **Install PortAudio**: `brew install portaudio`
+3.  **Install Xcode Tools**: `xcode-select --install`
+
+### 4. Hardware Acceleration (Optional but Recommended)
 - **Windows (NVIDIA)**: Automatically uses CUDA if available.
 - **macOS (Apple Silicon)**: Automatically uses MPS (Metal Performance Shaders) for Whisper inference.
 
-### 4. Launch NoteForge
+### 5. Launch NoteForge
 ```bash
 python main.py
 ```
