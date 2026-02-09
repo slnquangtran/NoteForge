@@ -58,7 +58,7 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         header.grid_columnconfigure(0, weight=1) # Title label expands
         header.grid_columnconfigure(1, weight=0) # Button doesn't expand
         
-        ctk.CTkLabel(header, text="📝 Note Summarization", font=("Segoe UI", 20, "bold")).grid(row=0, column=0, padx=0, pady=0, sticky="w")
+        ctk.CTkLabel(header, text="📝 AI Study Assistant", font=("Segoe UI", "SF Pro Text", "Helvetica", 20, "bold")).grid(row=0, column=0, padx=0, pady=0, sticky="w")
         
         self.btn_load = ctk.CTkButton(
             header, 
@@ -74,7 +74,7 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         # --- Main Content Area (Notes Textbox) ---
         self.notes_box = ctk.CTkTextbox(
             self, 
-            font=("Segoe UI", 14), # Consistent font
+            font=("Segoe UI", "SF Pro Text", "Helvetica", 13), # Consistent font
             wrap="word",
             corner_radius=8,
             border_width=2,
@@ -87,12 +87,13 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         self.thoughts_box = ctk.CTkTextbox(
             self,
             height=120,
-            font=("Consolas", 12),
+            font=("Segoe UI", "SF Pro Text", "Helvetica", 12),
             wrap="word",
             corner_radius=8,
             border_width=1,
             border_color="#444444",
-            fg_color="#1E1E1E"
+            fg_color="#1E1E1E",
+            text_color="#A0A0A0"
         )
         self.thoughts_box.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="nsew")
         self.thoughts_box.insert("1.0", "AI thoughts will appear here during processing...")

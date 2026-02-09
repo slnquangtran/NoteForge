@@ -85,10 +85,17 @@ class LectureNoteGenerator:
                 self.tokenizer = BartTokenizer.from_pretrained(model_name)
                 self.model = BartForConditionalGeneration.from_pretrained(model_name)
                 
-                self.device = 0 if torch.cuda.is_available() else -1
-                if self.device >= 0:
-                    self.model.to(f"cuda:{self.device}")
+                # Multi-platform device detection
+                if torch.cuda.is_available():
+                    self.device = "cuda"
+                    self.model.to(self.device)
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    self.device = "mps"
+                    self.model.to(self.device)
+                else:
+                    self.device = "cpu"
                 
+                print(f"BART using device: {self.device}")
                 self.bart_model_loaded = True
             except Exception as e:
                 import traceback

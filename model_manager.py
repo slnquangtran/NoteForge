@@ -100,8 +100,12 @@ class ModelManager:
             if key in self._loaded_models:
                 del self._loaded_models[key]
                 gc.collect()
-                if torch and torch.cuda.is_available():
+                if torch.cuda.is_available():
                     torch.cuda.empty_cache()
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    # Check if torch.mps exists (available in torch 2.0+)
+                    if hasattr(torch, "mps"):
+                        torch.mps.empty_cache()
                 logger.info(f"Unloaded model: {key}")
 
     def unload_all(self):
@@ -110,8 +114,11 @@ class ModelManager:
             for key in keys:
                 del self._loaded_models[key]
             gc.collect()
-            if torch and torch.cuda.is_available():
+            if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                if hasattr(torch, "mps"):
+                    torch.mps.empty_cache()
             logger.info("All models unloaded.")
 
     def _check_memory_pressure(self):
@@ -168,10 +175,16 @@ class ModelManager:
         # Let's use the transformers pipeline which manages downloading to HF cache.
         logger.info(f"Loading summarization pipeline: {model_name}")
         
-        # Check for GPU
-        device = 0 if torch and torch.cuda.is_available() else -1
-        logger.info(f"Using device for BART: {'GPU' if device == 0 else 'CPU'}")
+        # Cross-platform device detection
+        device = -1
+        if torch:
+            if torch.cuda.is_available():
+                device = 0
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                # Note: Transformers pipeling 'device' argument handles string names too
+                device = "mps"
         
+        logger.info(f"Using device for BART: {device}")
         return pipeline("summarization", model=model_name, device=device)
 
     def _download_file(self, url: str, path: str):

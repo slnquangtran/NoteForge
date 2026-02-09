@@ -191,7 +191,7 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         self.level_bar.set(0)
 
         # --- 3. Transcription Area (Textbox) ---
-        self.textbox = ctk.CTkTextbox(self, font=("Segoe UI", 16), wrap="word", padx=10, pady=10, corner_radius=8, border_width=2, border_color="#333333")
+        self.textbox = ctk.CTkTextbox(self, font=("Segoe UI", "SF Pro Text", "Helvetica", 16), wrap="word", padx=10, pady=10, corner_radius=8, border_width=2, border_color="#333333")
         self.textbox.grid(row=2, column=0, padx=15, pady=0, sticky="nsew") # Increased padding
         self.textbox.tag_config("gray", foreground="gray")
         self.textbox.tag_config("black", foreground="white") # Dark mode white
