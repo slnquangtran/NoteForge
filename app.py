@@ -78,7 +78,8 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         self.FRAME_DURATION_MS = 20
         self.FRAME_SIZE = int(self.SAMPLE_RATE * self.FRAME_DURATION_MS / 1000) # 320 samples for 20ms
         self.FRAME_BYTES = self.FRAME_SIZE * 2 # 16-bit PCM = 2 bytes per sample -> 640 bytes
-        self.VOSK_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "model")
+        # Robust Model Path Detection
+        self.VOSK_MODEL_PATH = self._find_model_path()
         self.WHISPER_MODEL_SIZE = config_manager.get_setting("whisper_model_size")
 
         # --- State ---
@@ -145,6 +146,25 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         except Exception as e:
             print(f"Error getting audio devices: {e}")
             self.devices_list = [(None, "Default Device")]
+
+    def _find_model_path(self):
+        """Search for the Vosk model in multiple logical locations"""
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        possible_paths = [
+            os.path.join(base_dir, "model"),                     # NoteForge/model
+            os.path.join(os.path.dirname(base_dir), "model"),    # Exp/model
+            os.path.join(os.path.dirname(os.path.dirname(base_dir)), "model") # Desktop/model (fallback)
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path) and os.path.isdir(path):
+                # Check for characteristic Vosk folder content (am/conf/graph)
+                if os.path.exists(os.path.join(path, "am")):
+                    print(f"DEBUG: Found valid Vosk model at: '{path}'")
+                    return path
+                    
+        print(f"WARNING: Could not find valid Vosk model folder in: {possible_paths}")
+        return possible_paths[1] # Default to Exp/model if not sure
 
     def create_widgets(self):
         self.grid_columnconfigure(0, weight=1)
