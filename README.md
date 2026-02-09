@@ -28,6 +28,7 @@ NoteForge is a powerful dual-purpose application that combines real-time voice t
 - **Multiple Input Formats**: Supports both text transcripts (.txt) and PowerPoint (.pptx)
 - **Study-Ready Output**: Generates structured lecture notes organized by topic
 - **PDF Export**: Save your notes as professional PDFs
+- **Automatic Session Export**: (NEW) Automatically saves every recording as `.wav` and `.txt` in the `recordings/` folder.
 
 ## Installation
 
@@ -39,15 +40,19 @@ cd NoteForge
 
 ### 2. Install Dependencies
 ```bash
+# Windows & macOS
 pip install -r requirements.txt
 ```
+*Note: macOS users are automatically pinned to `vosk==0.3.44` for system stability.*
 
+### 3. Hardware Acceleration (Optional but Recommended)
+- **Windows (NVIDIA)**: Automatically uses CUDA if available.
+- **macOS (Apple Silicon)**: Automatically uses MPS (Metal Performance Shaders) for Whisper inference.
 
-
-### 3. Launch NoteForge
+### 4. Launch NoteForge
 ```bash
 python main.py
 ```
-*Models will be downloaded automatically on the first run.*
+*Models will be downloaded automatically on the first run. The app will detect your hardware (CUDA/MPS/CPU) and optimize performance accordingly.*
 
 
