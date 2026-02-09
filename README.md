@@ -38,14 +38,36 @@ git clone https://github.com/slnquangtran/NoteForge.git
 cd NoteForge
 ```
 
-### 2. Install Dependencies
+### 2. macOS Prerequisites (Install FIRST)
+If you're on macOS, install system dependencies **before** Python packages:
 ```bash
-# Windows & macOS
+# Install Homebrew (if not already installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install system dependencies
+brew install portaudio llvm
+
+# Install Xcode Command Line Tools
+xcode-select --install
+```
+
+### 3. Install Python Dependencies
+```bash
+# Set LLVM path for macOS (Python 3.12 users)
+export LLVM_CONFIG=$(brew --prefix llvm)/bin/llvm-config  # macOS only
+
+# Install all dependencies
 pip install -r requirements.txt
 ```
-*Note: macOS users are automatically pinned to `vosk==0.3.44` for system stability.*
 
-### 3. Prerequisites for macOS (IMPORTANT)
+### 4. Verify Installation
+Check that all dependencies are installed:
+```bash
+python install_check.py
+```
+You should see `✅ All dependencies installed!` before proceeding.
+
+### 5. Troubleshooting (macOS)
 If you encounter **"Failed to build wheel"** or **"PortAudio not found"** errors on Mac, follow these steps:
 1.  **Install Homebrew**: [/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"](https://brew.sh)
 2.  **Install System Deps**: `brew install portaudio llvm`
@@ -76,11 +98,11 @@ If you see any `ModuleNotFoundError`, reinstall that specific package or run `pi
 
 *NoteForge v1.1.0 pins `llvmlite==0.42.0` and `numpy<2.0.0` which officially support Python 3.12.*
 
-### 4. Hardware Acceleration (Optional but Recommended)
+### 6. Hardware Acceleration (Optional but Recommended)
 - **Windows (NVIDIA)**: Automatically uses CUDA if available.
 - **macOS (Apple Silicon)**: Automatically uses MPS (Metal Performance Shaders) for Whisper inference.
 
-### 5. Launch NoteForge
+### 7. Launch NoteForge
 ```bash
 python main.py
 ```
