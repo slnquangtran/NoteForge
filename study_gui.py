@@ -23,7 +23,7 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         super().__init__(master)
         
         self.title("NoteForge - Note Summarization")
-        self.geometry("1000x800")
+        self.configure(fg_color="#312C51")
         self.center_window()
         
         self.assistant = None
@@ -52,13 +52,16 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         self.grid_rowconfigure(1, weight=3)    # Notes box weight
         self.grid_rowconfigure(2, weight=1)    # Thoughts box weight (Bottom)
 
-        # --- Header Frame ---
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew") # Adjusted pady
+        # --- Header Card ---
+        header_card = ctk.CTkFrame(self, fg_color="#48426D", corner_radius=25)
+        header_card.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
+        
+        header = ctk.CTkFrame(header_card, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=15)
         header.grid_columnconfigure(0, weight=1) # Title label expands
         header.grid_columnconfigure(1, weight=0) # Button doesn't expand
         
-        ctk.CTkLabel(header, text="📝 AI Study Assistant", font=("Segoe UI", "SF Pro Text", "Helvetica", 20, "bold")).grid(row=0, column=0, padx=0, pady=0, sticky="w")
+        ctk.CTkLabel(header, text="📝 AI Study Assistant", font=("Segoe UI", 20, "bold")).grid(row=0, column=0, padx=0, pady=0, sticky="w")
         
         self.btn_load = ctk.CTkButton(
             header, 
@@ -66,48 +69,58 @@ class StudyAssistantGUI(ctk.CTkToplevel):
             command=self.load_file,
             font=("Segoe UI", 14),
             corner_radius=8,
-            fg_color="#3B8ED0", # Consistent blue
-            hover_color="#42A5F5"
+            fg_color="#48426D", # Secondary Slate
+            hover_color="#5A547F"
         )
         self.btn_load.grid(row=0, column=1, padx=0, pady=0, sticky="e")
 
-        # --- Main Content Area (Notes Textbox) ---
-        self.notes_box = ctk.CTkTextbox(
-            self, 
-            font=("Segoe UI", "SF Pro Text", "Helvetica", 13), # Consistent font
-            wrap="word",
-            corner_radius=8,
-            border_width=2,
-            border_color="#333333"
-        )
-        self.notes_box.grid(row=1, column=0, padx=20, pady=5, sticky="nsew")
+        # --- Main Card ---
+        main_card = ctk.CTkFrame(self, fg_color="#48426D", corner_radius=30)
+        main_card.grid(row=1, column=0, padx=20, pady=5, sticky="nsew")
 
-        # --- AI Thoughts Area ---
-        ctk.CTkLabel(self, text="🧠 AI Thought Process", font=("Segoe UI", 12, "italic"), text_color="#00FFF5").grid(row=2, column=0, padx=20, pady=(10, 0), sticky="w")
-        self.thoughts_box = ctk.CTkTextbox(
-            self,
-            height=120,
-            font=("Segoe UI", "SF Pro Text", "Helvetica", 12),
+        self.notes_box = ctk.CTkTextbox(
+            main_card, 
+            font=("Segoe UI", 14), # Slightly larger
             wrap="word",
-            corner_radius=8,
+            corner_radius=20,
+            border_width=2,
+            border_color="#312C51"
+        )
+        self.notes_box.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # --- Thoughts Card ---
+        thoughts_card = ctk.CTkFrame(self, fg_color="#48426D", corner_radius=25)
+        thoughts_card.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="nsew")
+
+        ctk.CTkLabel(thoughts_card, text="🧠 AI Thought Process", font=("Segoe UI", 12, "italic"), text_color="#F0C38E").pack(padx=20, pady=(10, 0), anchor="w")
+        
+        self.thoughts_box = ctk.CTkTextbox(
+            thoughts_card,
+            height=120,
+            font=("Segoe UI", 12),
+            wrap="word",
+            corner_radius=15,
             border_width=1,
-            border_color="#444444",
+            border_color="#312C51",
             fg_color="#1E1E1E",
             text_color="#A0A0A0"
         )
-        self.thoughts_box.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="nsew")
+        self.thoughts_box.pack(fill="both", expand=True, padx=20, pady=(5, 15))
         self.thoughts_box.insert("1.0", "AI thoughts will appear here during processing...")
         self.thoughts_box.configure(state="disabled")
 
-        # --- Footer Frame ---
-        footer = ctk.CTkFrame(self, fg_color="transparent")
-        footer.grid(row=4, column=0, padx=20, pady=(10, 20), sticky="ew")
+        # --- Footer Card ---
+        footer_card = ctk.CTkFrame(self, fg_color="#48426D", corner_radius=25)
+        footer_card.grid(row=4, column=0, padx=20, pady=(10, 20), sticky="ew")
+
+        footer = ctk.CTkFrame(footer_card, fg_color="transparent")
+        footer.pack(fill="x", padx=20, pady=15)
         footer.grid_columnconfigure(0, weight=0) # Progress bar
         footer.grid_columnconfigure(1, weight=1) # Status label (expands)
         footer.grid_columnconfigure(2, weight=0) # Process button
         footer.grid_columnconfigure(3, weight=0) # Export button
         
-        self.progress_bar = ctk.CTkProgressBar(footer, width=200, height=10, corner_radius=5, fg_color="#333333", progress_color="#00FFF5")
+        self.progress_bar = ctk.CTkProgressBar(footer, width=200, height=10, corner_radius=5, fg_color="#48426D", progress_color="#F0C38E")
         self.progress_bar.grid(row=0, column=0, padx=(0, 15), pady=0, sticky="w")
         self.progress_bar.set(0)
         
@@ -121,8 +134,9 @@ class StudyAssistantGUI(ctk.CTkToplevel):
             state="disabled",
             font=("Segoe UI", 14),
             corner_radius=8,
-            fg_color="#2196F3", # Consistent blue
-            hover_color="#42A5F5"
+            fg_color="#F0C38E", # Tan/Peach
+            hover_color="#DEB17E",
+            text_color="#312C51"
         )
         self.btn_export.grid(row=0, column=2, padx=(0, 15), pady=0, sticky="e") # Pad to the left
         
@@ -130,8 +144,9 @@ class StudyAssistantGUI(ctk.CTkToplevel):
             footer, 
             text="📝 Generate Lecture Notes", 
             command=self.start_processing, 
-            fg_color="#27AE60", 
-            hover_color="#229954",
+            fg_color="#F1AA9B", # Coral
+            hover_color="#DD998A",
+            text_color="#312C51",
             font=("Segoe UI", 14),
             corner_radius=8
         )

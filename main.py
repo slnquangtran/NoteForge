@@ -28,7 +28,7 @@ class MainMenuApp(ctk.CTk):
         self.title("NoteForge")
         self.geometry("800x600")
         self.resizable(False, False)
-        self.configure(fg_color="#0a0a0a")
+        self.configure(fg_color="#312C51")
         
         # Center the window
         screen_width = self.winfo_screenwidth()
@@ -58,7 +58,7 @@ class MainMenuApp(ctk.CTk):
             self.loading_frame, 
             text="Checking models...", 
             font=("Segoe UI", 20, "bold"),
-            text_color="#fdcc4b"
+            text_color="#F0C38E"
         )
         self.loading_label.pack(pady=(0, 20))
 
@@ -112,29 +112,16 @@ class MainMenuApp(ctk.CTk):
 
     def init_main_ui(self):
         """Initializes the main menu UI (Background, Buttons, etc.)."""
-        # --- 1. BACKGROUND ---
-        bg_path = "bg.jpg" # Ensure this file exists
-        try:
-            img = Image.open(bg_path)
-            self.bg_img_data = ctk.CTkImage(
-                light_image=img,
-                dark_image=img,
-                size=(800, 600)
-            )
-            # Main background label serving as master for other widgets
-            self.main_bg = ctk.CTkLabel(self, image=self.bg_img_data, text="")
-            self.main_bg.place(x=0, y=0, relwidth=1, relheight=1)
-        except Exception as e:
-            print(f"Warning: Could not load background image: {e}")
-            self.main_bg = ctk.CTkFrame(self, fg_color="#0a0a0a")
-            self.main_bg.place(x=0, y=0, relwidth=1, relheight=1)
+        # No background image, use solid color
+        self.main_bg = ctk.CTkFrame(self, fg_color="#312C51")
+        self.main_bg.place(x=0, y=0, relwidth=1, relheight=1)
 
         # --- 2. HEADER ---
         self.title_label = ctk.CTkLabel(
             self.main_bg, 
             text="⚡ NOTEFORGE", 
             font=("Segoe UI", 42, "bold"),
-            text_color="#fdcc4b",
+            text_color="#F1AA9B",
             fg_color="transparent"
         )
         self.title_label.place(relx=0.5, rely=0.2, anchor="center")
@@ -149,14 +136,25 @@ class MainMenuApp(ctk.CTk):
         self.subtitle_label.place(relx=0.5, rely=0.28, anchor="center")
 
         # --- 3. BUTTONS AREA ---
-        btn_width = 300
-        btn_height = 50
-        btn_font = ("Segoe UI", 16)
-        btn_corner_radius = 8
+        btn_width = 340
+        btn_height = 55
+        btn_font = ("Segoe UI", 16, "bold")
+        btn_corner_radius = 20
 
-        self.button_frame = ctk.CTkFrame(self.main_bg, fg_color="transparent")
+        # Elevated Card for Buttons
+        self.button_frame = ctk.CTkFrame(
+            self.main_bg, 
+            fg_color="#48426D", 
+            corner_radius=30,
+            border_width=2,
+            border_color="#312C51"
+        )
         self.button_frame.place(relx=0.5, rely=0.6, anchor="center")
         self.button_frame.grid_columnconfigure(0, weight=1)
+        self.button_frame.grid_rowconfigure((0, 1, 2, 3), weight=0)
+        # Extra padding inside the card
+        container_pady = 25
+        container_padx = 30
 
         # 1. Transcription
         self.btn_transcriber = ctk.CTkButton(
@@ -165,14 +163,15 @@ class MainMenuApp(ctk.CTk):
             font=btn_font,
             width=btn_width,
             height=btn_height,
-            fg_color="#00ADB5",
-            hover_color="#00FFF5",
+            fg_color="#F0C38E",
+            hover_color="#DEB17E",
+            text_color="#312C51",
             border_width=2, 
-            border_color="#AAD7D9",
+            border_color="#48426D",
             corner_radius=btn_corner_radius,
             command=self.open_voice_transcriber
         )
-        self.btn_transcriber.grid(row=0, column=0, pady=10)
+        self.btn_transcriber.grid(row=0, column=0, pady=(container_pady, 10), padx=container_padx)
 
         # 2. Summarization
         self.btn_study = ctk.CTkButton(
@@ -181,14 +180,15 @@ class MainMenuApp(ctk.CTk):
             font=btn_font,
             width=btn_width,
             height=btn_height,
-            fg_color="#982598",
-            hover_color="#E491C9",
+            fg_color="#F1AA9B",
+            hover_color="#DD998A",
+            text_color="#312C51",
             command=self.open_study_assistant,
             border_width=2, 
-            border_color="#F1E9E9",
+            border_color="#48426D",
             corner_radius=btn_corner_radius
         )
-        self.btn_study.grid(row=1, column=0, pady=10)
+        self.btn_study.grid(row=1, column=0, pady=10, padx=container_padx)
 
         # 3. Settings
         self.btn_settings = ctk.CTkButton(
@@ -199,12 +199,12 @@ class MainMenuApp(ctk.CTk):
             height=btn_height,
             fg_color="transparent",
             border_width=2,
-            border_color="#3B8ED0",
-            text_color="#DCE4EE",
+            border_color="#48426D",
+            text_color="#F0C38E",
             corner_radius=btn_corner_radius,
             command=self.open_settings
         )
-        self.btn_settings.grid(row=2, column=0, pady=10)
+        self.btn_settings.grid(row=2, column=0, pady=10, padx=container_padx)
 
         # 4. Exit
         self.btn_exit = ctk.CTkButton(
@@ -213,14 +213,14 @@ class MainMenuApp(ctk.CTk):
             font=btn_font,
             width=btn_width,
             height=btn_height,
-            fg_color="#F63049",
-            hover_color="#D02752",
+            fg_color="#48426D",
+            hover_color="#5A547F",
             command=self.exit_app,
             border_width=2, 
-            border_color="#8A244B",
+            border_color="#F1AA9B",
             corner_radius=btn_corner_radius
         )
-        self.btn_exit.grid(row=3, column=0, pady=10)
+        self.btn_exit.grid(row=3, column=0, pady=(10, container_pady), padx=container_padx)
 
         # --- 4. FOOTER ---
         self.footer_label = ctk.CTkLabel(

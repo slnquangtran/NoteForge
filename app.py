@@ -8,6 +8,8 @@ import random
 import numpy as np
 import sounddevice as sd
 import config_manager
+import torch
+import wave
 
 
 # Conditional import for webrtcvad
@@ -69,7 +71,7 @@ class HybridTranscriberApp(ctk.CTkToplevel):
 
         # --- Window Setup ---
         self.title("NoteForge - Real-Time Transcription")
-        self.geometry("1100x850")
+        self.configure(fg_color="#312C51")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("green")
 
@@ -84,7 +86,12 @@ class HybridTranscriberApp(ctk.CTkToplevel):
 
         # --- State ---
         self.is_recording = False
-        self.is_recording = False
+        self.device_ready = False
+        self.recording_buffer = []
+        
+        # Ensure recordings directory exists
+        self.recordings_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recordings")
+        os.makedirs(self.recordings_dir, exist_ok=True)
         # --- Dual Queue Architecture ---
         self.vad_queue = queue.Queue(maxsize=100)      # Fast VAD processing (small buffer)
         self.vosk_queue = queue.Queue(maxsize=500)     # Slow Vosk processing (buffer for batching)
@@ -98,6 +105,13 @@ class HybridTranscriberApp(ctk.CTkToplevel):
 
         self.vosk_model = None
         self.whisper_model = None
+        self.device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+        print(f"INFO: Using device for transcription: {self.device}")
+        
+        if self.device == "cpu":
+            # Optimize CPU threading for inference
+            import multiprocessing
+            torch.set_num_threads(min(multiprocessing.cpu_count(), 4))
         if webrtcvad_available:
             self.vad = webrtcvad.Vad(2) # Mode 2: Aggressive
         else:
@@ -170,9 +184,12 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1) # Allow textbox to expand
 
-        # --- 1. Top Controls Frame (Record Button, Status, Mic Selector) ---
-        top_frame = ctk.CTkFrame(self, fg_color="transparent")
-        top_frame.grid(row=0, column=0, padx=15, pady=15, sticky="ew") # Increased padding
+        # --- 1. Top Controls Card ---
+        top_card = ctk.CTkFrame(self, fg_color="#48426D", corner_radius=25)
+        top_card.grid(row=0, column=0, padx=20, pady=20, sticky="ew")
+        
+        top_frame = ctk.CTkFrame(top_card, fg_color="transparent")
+        top_frame.pack(fill="x", padx=20, pady=15)
         top_frame.grid_columnconfigure(0, weight=0) # Record button
         top_frame.grid_columnconfigure(1, weight=1) # Status label (expands)
         top_frame.grid_columnconfigure(2, weight=0) # "Mic:" label
@@ -185,9 +202,10 @@ class HybridTranscriberApp(ctk.CTkToplevel):
             command=self.toggle_recording, 
             font=("Segoe UI", 16, "bold"), 
             height=40,
-            corner_radius=8,
-            fg_color="#2CC985", # Green for Start
-            hover_color="#36D491"
+            corner_radius=15,
+            fg_color="#F0C38E",
+            hover_color="#DEB17E",
+            text_color="#312C51"
         )
         self.record_btn.grid(row=0, column=0, padx=(0, 20), pady=0, sticky="w") # Pad to the right
 
@@ -206,28 +224,31 @@ class HybridTranscriberApp(ctk.CTkToplevel):
 
 
         # --- 2. Level Meter ---
-        self.level_bar = ctk.CTkProgressBar(self, height=10, corner_radius=5, fg_color="#333333", progress_color="#00FFF5")
-        self.level_bar.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="ew") # Increased padding
+        self.level_bar = ctk.CTkProgressBar(self, height=12, corner_radius=8, fg_color="#48426D", progress_color="#F0C38E")
+        self.level_bar.grid(row=1, column=0, padx=25, pady=(0, 20), sticky="ew")
         self.level_bar.set(0)
 
         # --- 3. Transcription Area (Textbox) ---
-        self.textbox = ctk.CTkTextbox(self, font=("Segoe UI", "SF Pro Text", "Helvetica", 16), wrap="word", padx=10, pady=10, corner_radius=8, border_width=2, border_color="#333333")
-        self.textbox.grid(row=2, column=0, padx=15, pady=0, sticky="nsew") # Increased padding
+        self.textbox = ctk.CTkTextbox(self, font=("Segoe UI", 16), wrap="word", padx=15, pady=15, corner_radius=20, border_width=2, border_color="#48426D")
+        self.textbox.grid(row=2, column=0, padx=20, pady=0, sticky="nsew")
         self.textbox.tag_config("gray", foreground="gray")
         self.textbox.tag_config("black", foreground="white") # Dark mode white
         self.textbox.configure(state="disabled") # Start disabled
 
-        # --- 4. Bottom Controls Frame ---
-        bot_frame = ctk.CTkFrame(self, fg_color="transparent")
-        bot_frame.grid(row=3, column=0, padx=15, pady=15, sticky="ew") # Increased padding
+        # --- 4. Bottom Controls Card ---
+        bot_card = ctk.CTkFrame(self, fg_color="#48426D", corner_radius=25)
+        bot_card.grid(row=3, column=0, padx=20, pady=20, sticky="ew")
+        
+        bot_frame = ctk.CTkFrame(bot_card, fg_color="transparent")
+        bot_frame.pack(fill="x", padx=20, pady=15)
         bot_frame.grid_columnconfigure(0, weight=0) # Clear button
         bot_frame.grid_columnconfigure(1, weight=0) # Save button
         bot_frame.grid_columnconfigure(2, weight=1) # Mode label (expands)
         
         # Clear Button
-        ctk.CTkButton(bot_frame, text="Clear", command=self.clear_text, width=100, font=("Segoe UI", 14), corner_radius=8, fg_color="#4CAF50", hover_color="#66BB6A").grid(row=0, column=0, padx=(0,10), pady=0, sticky="w")
+        ctk.CTkButton(bot_frame, text="Clear", command=self.clear_text, width=100, font=("Segoe UI", 14), corner_radius=12, fg_color="#312C51", hover_color="#48426D").grid(row=0, column=0, padx=(0,10), pady=0, sticky="w")
         # Save Button
-        ctk.CTkButton(bot_frame, text="Save", command=self.save_text, width=100, font=("Segoe UI", 14), corner_radius=8, fg_color="#2196F3", hover_color="#42A5F5").grid(row=0, column=1, padx=0, pady=0, sticky="w")
+        ctk.CTkButton(bot_frame, text="Save", command=self.save_text, width=100, font=("Segoe UI", 14), corner_radius=12, fg_color="#F1AA9B", hover_color="#DD998A", text_color="#312C51").grid(row=0, column=1, padx=0, pady=0, sticky="w")
         
         # Summarize Button
         self.summarize_btn = ctk.CTkButton(
@@ -236,9 +257,10 @@ class HybridTranscriberApp(ctk.CTkToplevel):
             command=self.summarize_text,
             width=120,
             font=("Segoe UI", 14),
-            corner_radius=8,
-            fg_color="#FF9800",  # Orange
-            hover_color="#FFB74D"
+            corner_radius=12,
+            fg_color="#F1AA9B",
+            hover_color="#DD998A",
+            text_color="#312C51"
         )
         self.summarize_btn.grid(row=0, column=2, padx=(10,10), pady=0, sticky="w")
         
@@ -263,7 +285,7 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         """Background thread for BART summarization"""
         try:
             from transformers import pipeline
-            if self.bart_model is None:
+            if self.bart_model == None:
                 # Load model naturally (transformers handles downloading/caching)
                 model_name = config_manager.get_setting("bart_model_name", "facebook/bart-large-cnn")
                 self.bart_model = pipeline("summarization", model=model_name)
@@ -341,8 +363,9 @@ class HybridTranscriberApp(ctk.CTkToplevel):
             return
 
         self.is_recording = True
-        self.record_btn.configure(text="Stop Recording", fg_color="red")
-        self.status_label.configure(text="Initializing Whisper...")
+        self.record_btn.configure(text="Stop Recording", fg_color="#F1AA9B", text_color="#312C51")
+        self.status_label.configure(text="Connecting to Mic...")
+        self.recording_buffer = [] # Clear buffer for new session
         
         # Clear queues robustly
         for q in [self.vad_queue, self.vosk_queue]:
@@ -391,20 +414,54 @@ class HybridTranscriberApp(ctk.CTkToplevel):
 
     def stop_recording(self):
         self.is_recording = False
-        self.record_btn.configure(text="Start Recording", fg_color="#2CC985") # Default green-ish
-        self.status_label.configure(text="Stopped")
+        self.record_btn.configure(text="Start Recording", fg_color="#F0C38E", text_color="#312C51")
         self.level_bar.set(0)
+        
+        # Export recording to WAV and Text
+        if self.recording_buffer:
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                audio_filename = f"recording_{timestamp}.wav"
+                text_filename = f"transcript_{timestamp}.txt"
+                
+                # Ensure recordings directory exists
+                os.makedirs(self.recordings_dir, exist_ok=True)
+                
+                # 1. Save Audio
+                audio_path = os.path.join(self.recordings_dir, audio_filename)
+                with wave.open(audio_path, 'wb') as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2) # 16-bit
+                    wf.setframerate(self.SAMPLE_RATE)
+                    wf.writeframes(b"".join(self.recording_buffer))
+                
+                # 2. Save Text
+                text_path = os.path.join(self.recordings_dir, text_filename)
+                transcript = self.textbox.get("1.0", ctk.END).strip()
+                with open(text_path, "w", encoding="utf-8") as f:
+                    f.write(transcript)
+                
+                self.status_label.configure(text=f"Saved: Audio & Transcript", text_color="#F0C38E")
+                print(f"DEBUG: Saved {audio_filename} and {text_filename}")
+            except Exception as e:
+                print(f"DEBUG: Error saving session: {e}")
+                self.status_label.configure(text="Error saving files", text_color="red")
+        else:
+            self.status_label.configure(text="Stopped (No Audio)")
 
     def audio_capture_loop(self):
         """Captures raw audio using SoundDevice (Blocking Mode for Stability)"""
+        print(f"DEBUG: Audio capture thread started with mic index {self.selected_mic_index}")
         try:
+            self.display_queue.put(("status", "Connecting to Mic..."))
             with sd.InputStream(samplerate=self.SAMPLE_RATE,
                                 blocksize=self.FRAME_SIZE,
                                 device=self.selected_mic_index,
                                 channels=1,
                                 dtype='int16') as stream: # No callback = blocking mode
                 
-                self.display_queue.put(("status", "Listening..."))
+                self.display_queue.put(("status", "Mic Connected. Listening..."))
+                print("DEBUG: sd.InputStream active.")
                 
                 while self.is_recording:
                     try:
@@ -430,6 +487,10 @@ class HybridTranscriberApp(ctk.CTkToplevel):
                                 continue # processing loop is blocking, so just continue to next read
                         
                         # Strict VAD frame size validation
+                        # 1. Accumulate for export
+                        self.recording_buffer.append(indata.tobytes())
+                        
+                        # 2. Push to VAD queue
                         if len(frame_bytes) == self.FRAME_BYTES:
                             try:
                                 self.vad_queue.put_nowait(frame_bytes)
@@ -446,13 +507,12 @@ class HybridTranscriberApp(ctk.CTkToplevel):
                         # Update Meter (Optimized: Calculate only if needed or skip occasionally?)
                         # Calculating RMS every 20ms is fine for numpy
                         try:
-                             # volume = np.sqrt(np.mean(indata**2)) # Slower
-                             # Fast approximation: max absolute value? or just stride?
-                             # Let's keep RMS but maybe every few frames if needed. For now it's fine.
-                             volume = np.sqrt(np.mean(indata['int16']**2)) if hasattr(indata, 'dtype') else np.sqrt(np.mean(indata**2)) 
-                             # Note: indata from read() is numpy array
-                             self.meter_queue.put(min(volume / 1000.0, 1.0))
-                        except:
+                             # Robust Volume Calculation
+                             audio_data = indata.astype(np.float32).flatten()
+                             peak = np.max(np.abs(audio_data))
+                             self.meter_queue.put(float(peak / 20000.0))
+                        except Exception as e:
+                             if self.vad_debug: print(f"DEBUG: Meter Error: {e}")
                              pass
 
                     except Exception as e:
@@ -490,111 +550,105 @@ class HybridTranscriberApp(ctk.CTkToplevel):
                      # This is better than stalling VAD.
 
     def vosk_processing_loop(self):
-        """Processes buffer for Real-time (Vosk) + Whisper Buffering
-        Consumes from vosk_queue (frame, is_active).
-        Uses Batching for Vosk AcceptWaveform.
-        """
-        rec = vosk.KaldiRecognizer(self.vosk_model, self.SAMPLE_RATE)
-        
-        # Audio buffer for the current sentence (Whisper)
-        sentence_buffer = collections.deque()
-        silence_frames = 0
-        is_speech = False
-        
-        # Batching for Vosk
-        batch_audio = []
-        batch_size_frames = 10 # 200ms
-        
-        while self.is_recording or not self.vosk_queue.empty():
-            try:
-                # Fetch tuple
-                data, is_active = self.vosk_queue.get(timeout=0.1)
-            except queue.Empty:
-                # Process remaining batch if any
-                if batch_audio:
-                     # (Duplicate logic from below, encapsulated for safety)
-                     pass 
-                continue
-
-            # --- 1. Vosk Recognition (Batched) ---
-            batch_audio.append(data)
-            self.monitor.log('processed_vosk')
+        """Processes buffer for Real-time (Vosk) + Whisper Buffering"""
+        try:
+            print("DEBUG: Vosk processing loop started.")
+            rec = vosk.KaldiRecognizer(self.vosk_model, self.SAMPLE_RATE)
             
-            if len(batch_audio) >= batch_size_frames:
-                # Process Batch
-                joined = b"".join(batch_audio)
-                if rec.AcceptWaveform(joined):
-                    result = json.loads(rec.Result())
-                    text = result.get("text", "")
-                    if text:
-                        self.display_queue.put(("draft", text))
-                else:
-                    partial = json.loads(rec.PartialResult())
-                    p_text = partial.get("partial", "")
-                    if p_text:
-                        self.display_queue.put(("partial", p_text))
+            # Audio buffer for the current sentence (Whisper)
+            sentence_buffer = collections.deque()
+            silence_frames = 0
+            is_speech = False
+            
+            # Batching for Vosk (Reduced for snappier partials)
+            batch_audio = []
+            batch_size_frames = 5 # 100ms (Reduced from 10)
+            
+            while self.is_recording or not self.vosk_queue.empty():
+                try:
+                    # Fetch tuple
+                    data, is_active = self.vosk_queue.get(timeout=0.1)
+                except queue.Empty:
+                    # Process remaining batch if any
+                    if batch_audio:
+                         pass 
+                    continue
+
+                # --- 1. Vosk Recognition (Batched) ---
+                batch_audio.append(data)
+                self.monitor.log('processed_vosk')
                 
-                batch_audio = [] # Reset
+                if len(batch_audio) >= batch_size_frames:
+                    # Process Batch
+                    joined = b"".join(batch_audio)
+                    if rec.AcceptWaveform(joined):
+                        result = json.loads(rec.Result())
+                        text = result.get("text", "")
+                        if text:
+                            self.display_queue.put(("draft", text))
+                    else:
+                        partial = json.loads(rec.PartialResult())
+                        p_text = partial.get("partial", "")
+                        if p_text:
+                            self.display_queue.put(("partial", p_text))
+                    
+                    batch_audio = [] # Reset
 
-            # --- 2. Buffer Management for Whisper (State Machine) ---
-            # NOTE: We must check 'is_active' for EACH frame. 
-            # Since we pull one by one from queue, we can just run this logic per frame.
-            
-            # Parameters
-            MIN_SILENCE_FRAMES = 25  # 500ms
+                # --- 2. Buffer Management for Whisper ---
+                MIN_SILENCE_FRAMES = 25  # 500ms
 
-            if self.vad_debug and self.is_recording and random.random() < 0.05: # Reduce log spam
-                 vad_status = "SPEECH" if is_active else "SILENCE"
-                 print(f"VAD: {vad_status}, Buffer: {len(sentence_buffer)}, Silence: {silence_frames}")
-
-            if is_active:
-                if not is_speech:
-                    # Speech started
-                    is_speech = True
-                    silence_frames = 0
-                    if len(sentence_buffer) > 3:
+                if is_active:
+                    if not is_speech:
+                        is_speech = True
+                        silence_frames = 0
                         while len(sentence_buffer) > 3:
                             sentence_buffer.popleft()
-                
-                silence_frames = 0
-                sentence_buffer.append(data)
-            
-            else: # Not active (Silence)
-                if is_speech:
-                    silence_frames += 1
-                    sentence_buffer.append(data)
                     
-                    if silence_frames > MIN_SILENCE_FRAMES: 
-                        full_audio = b"".join(sentence_buffer)
+                    silence_frames = 0
+                    sentence_buffer.append(data)
+                
+                else: # Silence
+                    if is_speech:
+                        silence_frames += 1
+                        sentence_buffer.append(data)
                         
-                        if len(full_audio) > self.SAMPLE_RATE * 0.5 * 2: 
-                            try:
-                                self.whisper_queue.put_nowait(full_audio)
-                                self.display_queue.put(("status", "Improving accuracy..."))
-                            except queue.Full:
-                                print("Whisper queue full, sentence dropped")
-                        
-                        sentence_buffer.clear()
-                        is_speech = False
-                        silence_frames = 0
-                        if len(data) > 0:
-                            sentence_buffer.append(data)
+                        if silence_frames > MIN_SILENCE_FRAMES: 
+                            full_audio = b"".join(sentence_buffer)
+                            
+                            if len(full_audio) > self.SAMPLE_RATE * 0.5 * 2: 
+                                try:
+                                    self.whisper_queue.put_nowait(full_audio)
+                                    self.display_queue.put(("status", "Improving accuracy..."))
+                                except queue.Full:
+                                    print("Whisper queue full, sentence dropped")
+                            
+                            sentence_buffer.clear()
+                            is_speech = False
+                            silence_frames = 0
+                    else: 
+                         sentence_buffer.append(data)
+                         while len(sentence_buffer) > 10:
+                             sentence_buffer.popleft()
 
-                else: 
-                     sentence_buffer.append(data)
-                     while len(sentence_buffer) > 10:
-                         sentence_buffer.popleft()
+        except Exception as e:
+            print(f"DEBUG: Vosk Loop Error: {e}")
+            self.display_queue.put(("error", f"Vosk Error: {e}"))
 
     def whisper_processing_loop(self):
         """Loads Whisper (once) and processes sentences for accuracy"""
+        print("DEBUG: Whisper thread started.")
         if not whisper:
             self.display_queue.put(("error", "Whisper module not found."))
             return
 
         try:
             if self.whisper_model is None:
-                self.display_queue.put(("status", "Loading Whisper Model (takes time)..."))
-                self.whisper_model = whisper.load_model(self.WHISPER_MODEL_SIZE)
+                self.display_queue.put(("status", f"Checking hardware ({self.device})..."))
+                print(f"DEBUG: Loading Whisper on device: {self.device}")
+                time.sleep(0.1)
+                self.display_queue.put(("status", f"Loading Whisper {self.WHISPER_MODEL_SIZE}..."))
+                self.whisper_model = whisper.load_model(self.WHISPER_MODEL_SIZE, device=self.device)
+                print("DEBUG: Whisper model loaded successfully.")
                 self.display_queue.put(("status", "Whisper Ready. Listening..."))
         except Exception as e:
             self.display_queue.put(("error", f"Whisper Load Error: {e}"))
@@ -610,8 +664,18 @@ class HybridTranscriberApp(ctk.CTkToplevel):
                 # Convert bytes to float32 numpy array for Whisper
                 audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
                 
-                # Transcribe
-                result = self.whisper_model.transcribe(audio_np, fp16=False, language="english")
+                # Transcribe (Optimized for Speed)
+                # fp16 only if using CUDA
+                use_fp16 = True if self.device == "cuda" else False
+                
+                result = self.whisper_model.transcribe(
+                    audio_np, 
+                    fp16=use_fp16, 
+                    language="english",
+                    beam_size=1,        # Faster (original default is often 5)
+                    best_of=1,          # Faster
+                    patience=1.0        # Default
+                )
                 text = result.get("text", "").strip()
                 
                 if text:
@@ -621,46 +685,47 @@ class HybridTranscriberApp(ctk.CTkToplevel):
                  print(f"Whisper Error: {e}")
 
     def update_ui_loop(self):
-        # 1. Handle Display Updates
         try:
+            # 1. Handle Display Updates
             while not self.display_queue.empty():
-                msg_type, content = self.display_queue.get_nowait()
-                
-                if msg_type == "status":
-                    self.status_label.configure(text=content)
-                elif msg_type == "error":
-                    messagebox.showerror("Error", content)
-                elif msg_type == "partial":
-                    # For partial, we might want to update a "preview" line
-                    # For now, let's just log or ignoring to avoid cluttering if we have draft
-                    pass 
-                elif msg_type == "draft":
-                    # Vosk final result (Gray)
-                    self.insert_text(f"[Draft] {content}\n", "gray")
-                elif msg_type == "final":
-                    # Whisper result (Black/White - Final)
-                    # Ideally, we would replace the "Draft" line. 
-                    # For simplicity, we append "Final".
-                    # A better UI would replace the last line if it was draft.
-                    self.replace_last_draft_with_final(content)
+                try:
+                    msg_type, content = self.display_queue.get_nowait()
+                    
+                    if msg_type == "status":
+                        self.status_label.configure(text=content)
+                    elif msg_type == "error":
+                        messagebox.showerror("Error", content)
+                    elif msg_type == "partial":
+                        pass 
+                    elif msg_type == "draft":
+                        self.insert_text(f"[Draft] {content}\n", "gray")
+                    elif msg_type == "final":
+                        self.replace_last_draft_with_final(content)
+                except queue.Empty:
+                    break
+                except Exception as e:
+                    print(f"DEBUG: UI Update Error (msg={msg_type}): {e}")
 
-        except queue.Empty:
-            pass
+            # 2. Handle Meter
+            try:
+                if not self.meter_queue.empty():
+                    level = self.meter_queue.get_nowait()
+                    level = max(0.0, min(1.0, float(level)))
+                    self.level_bar.set(level)
+            except Exception as e:
+                # print(f"DEBUG: Meter UI Error: {e}")
+                pass
+            
+            # 3. Debug Stats
+            if self.is_recording and random.random() < 0.05:
+                 print(f"FPS: Cap={self.monitor.get_fps('captured')} VAD={self.monitor.get_fps('processed_vad')} Vosk={self.monitor.get_fps('processed_vosk')}")
 
-        # 2. Handle Meter
-        try:
-            if not self.meter_queue.empty():
-                level = self.meter_queue.get_nowait()
-                self.level_bar.set(level)
-        except:
-            pass
+        except Exception as e:
+            print(f"DEBUG: Global UI Loop Error: {e}")
         
-        # 3. Debug Stats (Console Only)
-        if self.is_recording and random.random() < 0.05: # Log occasionally
-             print(f"FPS: Cap={self.monitor.get_fps('captured')} VAD={self.monitor.get_fps('processed_vad')} Vosk={self.monitor.get_fps('processed_vosk')} | Dropped: Cap={self.monitor.stats['dropped_capture']} VAD={self.monitor.stats['dropped_vad']}")
-             # Reset periodically to keep FPS relevant? Maybe not needed for simple diagnostics.
-
-        self.after(50, self.update_ui_loop)
+        # Always reschedule to prevent hang
+        interval = 50 if self.is_recording else 200
+        self.after(interval, self.update_ui_loop)
 
     def insert_text(self, text, tag):
         self.textbox.configure(state="normal")
