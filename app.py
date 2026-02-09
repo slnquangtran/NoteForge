@@ -120,6 +120,10 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         self.get_available_devices()
         self.selected_mic_index = None
 
+        # --- Summarization Setup ---
+        self.bart_model = None
+        self.summarization_thread = None
+
         # --- UI Layout ---
         self.create_widgets()
         
@@ -204,8 +208,100 @@ class HybridTranscriberApp(ctk.CTkToplevel):
         ctk.CTkButton(bot_frame, text="Clear", command=self.clear_text, width=100, font=("Segoe UI", 14), corner_radius=8, fg_color="#4CAF50", hover_color="#66BB6A").grid(row=0, column=0, padx=(0,10), pady=0, sticky="w")
         # Save Button
         ctk.CTkButton(bot_frame, text="Save", command=self.save_text, width=100, font=("Segoe UI", 14), corner_radius=8, fg_color="#2196F3", hover_color="#42A5F5").grid(row=0, column=1, padx=0, pady=0, sticky="w")
+        
+        # Summarize Button
+        self.summarize_btn = ctk.CTkButton(
+            bot_frame, 
+            text="Summarize 🪄", 
+            command=self.summarize_text,
+            width=120,
+            font=("Segoe UI", 14),
+            corner_radius=8,
+            fg_color="#FF9800",  # Orange
+            hover_color="#FFB74D"
+        )
+        self.summarize_btn.grid(row=0, column=2, padx=(10,10), pady=0, sticky="w")
+        
         # Mode Label
-        ctk.CTkLabel(bot_frame, text="Mode: Hybrid (Vosk Real-time -> Whisper Correction)", font=("Segoe UI", 12), text_color="gray").grid(row=0, column=2, padx=(20,0), pady=0, sticky="e") # Pad to the left
+        ctk.CTkLabel(bot_frame, text="Mode: Hybrid (Vosk Real-time -> Whisper Correction)", font=("Segoe UI", 12), text_color="gray").grid(row=0, column=3, padx=(20,0), pady=0, sticky="e") # Pad to the left
+
+    def summarize_text(self):
+        """Trigger summarization of current transcription"""
+        text = self.textbox.get("1.0", ctk.END).strip()
+        if not text:
+            messagebox.showwarning("Warning", "No text to summarize!")
+            return
+
+        self.summarize_btn.configure(state="disabled", text="Summarizing...")
+        self.status_label.configure(text="Summarizing text...")
+        
+        # Start background thread
+        self.summarization_thread = threading.Thread(target=self.run_summarization, args=(text,))
+        self.summarization_thread.start()
+
+    def run_summarization(self, text):
+        """Background thread for BART summarization"""
+        try:
+            from transformers import pipeline
+            if self.bart_model is None:
+                # Load model naturally (transformers handles downloading/caching)
+                model_name = config_manager.get_setting("bart_model_name", "facebook/bart-large-cnn")
+                self.bart_model = pipeline("summarization", model=model_name)
+            
+            # Simple chunking for very long text to avoid index errors
+            max_chunk = 3000 # chars ~ 750 tokens
+            chunks = [text[i:i+max_chunk] for i in range(0, len(text), max_chunk)]
+            
+            summaries = []
+            for chunk in chunks:
+                 if len(chunk) < 50: continue
+                 # Use default BART parameters as requested
+                 res = self.bart_model(chunk, max_length=130, min_length=30, do_sample=False)
+                 summaries.append(res[0]['summary_text'])
+            
+            full_summary = " ".join(summaries)
+            
+            # Schedule UI update
+            self.after(0, lambda: self.show_summary_popup(text, full_summary))
+            
+        except Exception as e:
+            self.after(0, lambda: messagebox.showerror("Summarization Error", str(e)))
+        finally:
+            self.after(0, lambda: self.summarize_btn.configure(state="normal", text="Summarize 🪄"))
+            self.after(0, lambda: self.status_label.configure(text="Ready"))
+
+    def show_summary_popup(self, original_text, summary):
+        """Display summary in modal popup"""
+        popup = ctk.CTkToplevel(self)
+        popup.title("Summary")
+        popup.geometry("600x500")
+        
+        # Setup popup UI
+        orig_count = len(original_text.split())
+        summ_count = len(summary.split())
+        ctk.CTkLabel(popup, text=f"Original: {orig_count} words | Summary: {summ_count} words", font=("Segoe UI", 12, "bold")).pack(pady=10)
+        
+        txt = ctk.CTkTextbox(popup, font=("Segoe UI", 14), wrap="word")
+        txt.pack(fill="both", expand=True, padx=20, pady=10)
+        txt.insert("1.0", summary)
+        
+        btn_frame = ctk.CTkFrame(popup, fg_color="transparent")
+        btn_frame.pack(pady=20)
+        
+        def copy_to_clipboard():
+            self.clipboard_clear()
+            self.clipboard_append(summary)
+            messagebox.showinfo("Copied", "Summary copied to clipboard!")
+            
+        def insert_to_main():
+            self.textbox.configure(state="normal")
+            self.textbox.insert(ctk.END, f"\n\n[SUMMARY]\n{summary}\n\n", "black")
+            self.textbox.configure(state="disabled")
+            popup.destroy()
+
+        ctk.CTkButton(btn_frame, text="Copy", command=copy_to_clipboard).pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="Insert", command=insert_to_main).pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="Close", command=popup.destroy, fg_color="gray").pack(side="left", padx=10)
 
     def change_mic(self, choice):
         for idx, name in self.devices_list:

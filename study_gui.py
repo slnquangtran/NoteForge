@@ -5,9 +5,18 @@ import os
 
 # Import Logic
 try:
-    from study_assistant import ConceptualAssistant
+    from study_assistant import LectureNoteGenerator
 except ImportError:
-    ConceptualAssistant = None
+    # Handle folder name conflict by importing the file directly
+    import importlib.util
+    import os
+    if os.path.exists("study_assistant.py"):
+        spec = importlib.util.spec_from_file_location("study_assistant_mod", "study_assistant.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        LectureNoteGenerator = mod.LectureNoteGenerator
+    else:
+        LectureNoteGenerator = None
 
 class StudyAssistantGUI(ctk.CTkToplevel):
     def __init__(self, master=None):
@@ -21,8 +30,8 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         self.processed_data = None
         
         # Initialize assistant immediately (no heavy model loading)
-        if ConceptualAssistant:
-            self.assistant = ConceptualAssistant()
+        if LectureNoteGenerator:
+            self.assistant = LectureNoteGenerator()
             status_text = "Ready. Load a file to generate lecture notes."
         else:
             status_text = "Error: missing logic module."
@@ -39,8 +48,9 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         self.geometry(f"{width}x{height}+{x}+{y}")
 
     def create_widgets(self):
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1) # Allow notes_box to expand
+        self.grid_columnconfigure(0, weight=3) # Notes box (Left/Top)
+        self.grid_rowconfigure(1, weight=3)    # Notes box weight
+        self.grid_rowconfigure(2, weight=1)    # Thoughts box weight (Bottom)
 
         # --- Header Frame ---
         header = ctk.CTkFrame(self, fg_color="transparent")
@@ -70,11 +80,27 @@ class StudyAssistantGUI(ctk.CTkToplevel):
             border_width=2,
             border_color="#333333"
         )
-        self.notes_box.grid(row=1, column=0, padx=20, pady=10, sticky="nsew") # Adjusted pady
+        self.notes_box.grid(row=1, column=0, padx=20, pady=5, sticky="nsew")
+
+        # --- AI Thoughts Area ---
+        ctk.CTkLabel(self, text="🧠 AI Thought Process", font=("Segoe UI", 12, "italic"), text_color="#00FFF5").grid(row=2, column=0, padx=20, pady=(10, 0), sticky="w")
+        self.thoughts_box = ctk.CTkTextbox(
+            self,
+            height=120,
+            font=("Consolas", 12),
+            wrap="word",
+            corner_radius=8,
+            border_width=1,
+            border_color="#444444",
+            fg_color="#1E1E1E"
+        )
+        self.thoughts_box.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="nsew")
+        self.thoughts_box.insert("1.0", "AI thoughts will appear here during processing...")
+        self.thoughts_box.configure(state="disabled")
 
         # --- Footer Frame ---
         footer = ctk.CTkFrame(self, fg_color="transparent")
-        footer.grid(row=2, column=0, padx=20, pady=(10, 20), sticky="ew") # Adjusted pady
+        footer.grid(row=4, column=0, padx=20, pady=(10, 20), sticky="ew")
         footer.grid_columnconfigure(0, weight=0) # Progress bar
         footer.grid_columnconfigure(1, weight=1) # Status label (expands)
         footer.grid_columnconfigure(2, weight=0) # Process button
@@ -118,27 +144,55 @@ class StudyAssistantGUI(ctk.CTkToplevel):
             self.loaded_filepath = filepath # Store path, don't read text yet if binary
             
             try:
-                # Basic preview
-                if filepath.endswith(".txt"):
-                    with open(filepath, "r", encoding="utf-8") as f:
-                        preview = f.read(500)
-                    self.notes_box.delete("1.0", "end")
-                    self.notes_box.insert("1.0", f"Preview (TXT):\n{preview}...")
-                else:
-                    self.notes_box.delete("1.0", "end")
-                    self.notes_box.insert("1.0", f"Preview (PPTX):\nLoaded slides from {os.path.basename(filepath)}\n\nClick 'Generate Lecture Notes' to process.")
+                # Robust preview logic
+                self.notes_box.delete("1.0", "end")
+                self.thoughts_box.configure(state="normal")
+                self.thoughts_box.delete("1.0", "end")
                 
-                self.status_var.set(f"Loaded: {os.path.basename(filepath)}")
+                if filepath.lower().endswith(".txt"):
+                    # Try multiple encodings
+                    content = ""
+                    for enc in ['utf-8', 'latin-1', 'cp1252']:
+                        try:
+                            with open(filepath, "r", encoding=enc) as f:
+                                content = f.read(2000) # Read more for preview
+                            break
+                        except: continue
+                    
+                    self.notes_box.insert("1.0", f"Preview (Text File):\n{'-'*40}\n{content}...")
+                    self.thoughts_box.insert("1.0", f"Selected text file: {os.path.basename(filepath)}")
+                
+                elif filepath.lower().endswith(".pptx"):
+                    from pptx import Presentation
+                    prs = Presentation(filepath)
+                    slide_count = len(prs.slides)
+                    titles = []
+                    for i, slide in enumerate(prs.slides[:5]):
+                        title = slide.shapes.title.text if slide.shapes.title else f"Slide {i+1}"
+                        titles.append(f"- {title}")
+                    
+                    summary = f"PowerPoint Presentation:\n- Total Slides: {slide_count}\n- First few slide titles:\n" + "\n".join(titles)
+                    self.notes_box.insert("1.0", f"Preview (PPTX):\n{'-'*40}\n{summary}\n\n[Click 'Generate' to analyze all slides]")
+                    self.thoughts_box.insert("1.0", f"Selected PowerPoint: {os.path.basename(filepath)} with {slide_count} slides.")
+                
+                self.thoughts_box.configure(state="disabled")
+                self.status_var.set(f"Ready: {os.path.basename(filepath)}")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to read file: {e}")
+                messagebox.showerror("Error", f"Failed to preview file: {e}")
 
     def start_processing(self):
         if not self.loaded_filepath: 
             return
 
-        self.status_var.set("Generating lecture notes...")
+        self.status_var.set("AI is starting to analyze your content...")
         self.progress_bar.set(0)
         self.btn_process.configure(state="disabled")
+        
+        # Reset thoughts box
+        self.thoughts_box.configure(state="normal")
+        self.thoughts_box.delete("1.0", "end")
+        self.thoughts_box.insert("end", ">>> AI Thought Process Started <<<\n")
+        self.thoughts_box.configure(state="disabled")
         
         threading.Thread(target=self.run_pipeline, daemon=True).start()
 
@@ -148,6 +202,10 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         def update_status(msg, progress=0):
             self.status_var.set(msg)
             self.progress_bar.set(progress)
+            
+            # If it's a "thought", add it to the thoughts box
+            if msg.startswith("AI Thought:"):
+                self.after(0, lambda m=msg: self.add_thought(m))
 
         try:
             # Use process_file which handles parsing
@@ -155,9 +213,24 @@ class StudyAssistantGUI(ctk.CTkToplevel):
             self.processed_data = results
             self.after(0, self.display_results)
         except Exception as e:
-            self.status_var.set(f"Error: {e}")
-            print(f"Pipeline Error: {e}")
+            import traceback
+            error_details = traceback.format_exc()
+            self.after(0, lambda: self.status_var.set(f"Error: {e}"))
+            self.after(0, lambda: self.add_thought(f"ERROR: {e}\n{error_details}"))
+            print(f"Pipeline Error:\n{error_details}")
             self.after(0, lambda: self.btn_process.configure(state="normal"))
+
+    def add_thought(self, message):
+        """Thread-safe update for the AI thoughts box"""
+        def update():
+            self.thoughts_box.configure(state="normal")
+            # Strip "AI Thought: " for cleaner logging
+            clean_msg = message.replace("AI Thought: ", "")
+            self.thoughts_box.insert("end", f"→ {clean_msg}\n")
+            self.thoughts_box.see("end") # Scroll to bottom
+            self.thoughts_box.configure(state="disabled")
+        
+        self.after(0, update)
 
     def display_results(self):
         data = self.processed_data

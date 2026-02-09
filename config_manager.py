@@ -11,6 +11,7 @@ CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 
 DEFAULT_SETTINGS = {
     "whisper_model_size": "large",
+    "bart_model_name": "facebook/bart-large-cnn",
 }
 
 def load_settings():
@@ -28,14 +29,31 @@ def save_settings(settings):
     with open(CONFIG_FILE, "w") as f:
         json.dump(settings, f, indent=4)
 
-def get_setting(key):
+def get_setting(key, default=None):
     settings = load_settings()
-    return settings.get(key, DEFAULT_SETTINGS.get(key))
+    # simple validation for whisper model size
+    if key == "whisper_model_size":
+        val = settings.get(key, DEFAULT_SETTINGS.get(key))
+        if val not in ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"]:
+            return "base"
+        return val
+        
+    return settings.get(key, default if default is not None else DEFAULT_SETTINGS.get(key))
 
-def set_setting(key, value):
+def validate_config():
+    """Ensures config file has valid keys/values."""
     settings = load_settings()
-    settings[key] = value
-    save_settings(settings)
+    changed = False
+    
+    # Ensure defaults exist
+    for k, v in DEFAULT_SETTINGS.items():
+        if k not in settings:
+            settings[k] = v
+            changed = True
+            
+    if changed:
+        save_settings(settings)
+
 
 def get_whisper_cache_dir():
     # Attempt to find Whisper's default cache directory
@@ -88,7 +106,28 @@ def delete_models(whisper_model_size_to_delete=None):
         print(f"Whisper model file not found in cache: {model_path}")
         success_whisper = True # Consider it a success if it's not there
 
-    return success_vosk and success_whisper
+    # 3. Delete BART model (HuggingFace cache)
+    success_bart = False
+    bart_model_name = get_setting("bart_model_name", "facebook/bart-large-cnn")
+    try:
+        from huggingface_hub import scan_cache_dir
+        cache_info = scan_cache_dir()
+        # Find the specific repo
+        repo_to_delete = next((repo for repo in cache_info.repos if repo.repo_id == bart_model_name), None)
+        if repo_to_delete:
+            delete_strategy = cache_info.delete_revisions(*[revision.commit_hash for revision in repo_to_delete.revisions])
+            delete_strategy.execute()
+            print(f"Deleted BART model: {bart_model_name}")
+            success_bart = True
+        else:
+            print(f"BART model '{bart_model_name}' not found in cache.")
+            success_bart = True
+    except Exception as e:
+        print(f"Error checking/deleting BART model: {e}")
+        # transformers might not be installed yet or other errors
+        success_bart = True 
+
+    return success_vosk and success_whisper and success_bart
 
 def download_models(progress_callback=None):
     """
@@ -208,6 +247,32 @@ def download_models(progress_callback=None):
         if progress_callback:
             progress_callback(f"Whisper model '{current_whisper_size}' ready.", 1.0)
     
+    # 3. BART Model Download
+    bart_model_name = get_setting("bart_model_name", "facebook/bart-large-cnn")
+    if progress_callback:
+        progress_callback(f"Checking BART model '{bart_model_name}'...", 0.9)
+    try:
+        from transformers import AutoConfig, pipeline
+        try:
+            # Check if model exists locally
+            AutoConfig.from_pretrained(bart_model_name, local_files_only=True)
+            print(f"BART model '{bart_model_name}' already present.")
+        except Exception:
+            print(f"BART model '{bart_model_name}' not found. Downloading...")
+            if progress_callback:
+                progress_callback(f"Downloading BART model (this may take time)...", 0.9)
+            # This triggers download
+            pipeline("summarization", model=bart_model_name)
+            print(f"BART model '{bart_model_name}' downloaded successfully.")
+        
+        if progress_callback:
+            progress_callback("All models ready.", 1.0)
+            
+    except Exception as e:
+        print(f"Error checking/downloading BART model: {e}")
+        # Note: We don't fail the whole app if BART fails, as transcription is the core.
+        # But we log it.
+    
     return True # Indicate success
 
 def clear_all_models():
@@ -237,5 +302,15 @@ def clear_all_models():
             print(f"Error deleting Whisper cache directory {whisper_cache_dir}: {e}")
     else:
         print(f"Whisper cache directory not found at {whisper_cache_dir}.")
+
+    # Delete HuggingFace cache (for BART and others)
+    try:
+        from huggingface_hub import constants
+        hf_cache_dir = constants.HF_HUB_CACHE
+        if os.path.exists(hf_cache_dir):
+            shutil.rmtree(hf_cache_dir)
+            print(f"Deleted HuggingFace cache: {hf_cache_dir}")
+    except Exception as e:
+        print(f"Error clearing HuggingFace cache: {e}")
 
     return True
