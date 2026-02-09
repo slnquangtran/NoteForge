@@ -20,6 +20,15 @@ except ImportError as e:
     print(f"Error importing study gui: {e}")
     StudyAssistantGUI = None
 
+# Check if critical modules failed to import
+if HybridTranscriberApp is None or StudyAssistantGUI is None:
+    print("\n⚠️  MISSING DEPENDENCIES DETECTED")
+    print("Please ensure all dependencies are installed:")
+    print("  pip install -r requirements.txt")
+    print("\nTo verify installation, run:")
+    print("  python -c \"import torch; import whisper; import vosk; import pptx; print('✅ All dependencies installed!')\"")
+    print()
+
 class MainMenuApp(ctk.CTk): 
     def __init__(self):
         super().__init__()

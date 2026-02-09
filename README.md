@@ -66,6 +66,14 @@ If you see this error even after installing requirements:
 1. **Uninstall duplicates**: `pip uninstall whisper` (this is a different package)
 2. **Reinstall correct package**: `pip install openai-whisper`
 3. **Check environment**: Ensure you are running `python` from the same environment where you ran `pip install`.
+
+#### ✅ Verify Installation
+After installing dependencies, verify everything is ready:
+```bash
+python -c "import torch; import whisper; import vosk; import pptx; print('✅ All dependencies installed!')"
+```
+If you see any `ModuleNotFoundError`, reinstall that specific package or run `pip install -r requirements.txt` again.
+
 *NoteForge v1.1.0 pins `llvmlite==0.42.0` and `numpy<2.0.0` which officially support Python 3.12.*
 
 ### 4. Hardware Acceleration (Optional but Recommended)
