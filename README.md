@@ -39,7 +39,7 @@ cd NoteForge
 ```
 
 ### 2. macOS Prerequisites (Install FIRST)
-**⚠️ IMPORTANT: macOS users should see the dedicated [macOS Installation Guide](MAC_INSTALLATION.md) for step-by-step instructions.**
+**IMPORTANT: macOS users should see the dedicated [macOS Installation Guide](MAC_INSTALLATION.md) for step-by-step instructions.**
 
 If you're on macOS, install system dependencies **before** Python packages:
 
@@ -70,17 +70,17 @@ Check that all dependencies are installed:
 ```bash
 python install_check.py
 ```
-You should see `✅ All dependencies installed!` before proceeding.
+You should see `All dependencies installed!` before proceeding.
 
 ### 5. Troubleshooting (macOS)
-**📖 For comprehensive macOS troubleshooting, see [MAC_INSTALLATION.md](MAC_INSTALLATION.md)**
+**For comprehensive macOS troubleshooting, see [MAC_INSTALLATION.md](MAC_INSTALLATION.md)**
 
 If you encounter **"Failed to build wheel"** or **"PortAudio not found"** errors on Mac, follow these steps:
 1.  **Install Homebrew**: [/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"](https://brew.sh)
 2.  **Install System Deps**: `brew install portaudio llvm`
 3.  **Install Xcode Tools**: `xcode-select --install`
 
-#### 🛠️ Fix for `llvmlite` / `numba` Build Error
+#### Fix for `llvmlite` / `numba` Build Error
 If you are on **Python 3.12** and see `TypeError: spawn() got an unexpected keyword argument 'dry_run'`, follow these steps:
 1.  **Ensure LLVM is installed**: `brew install llvm`
 2.  **Use the correct env var**:
@@ -90,13 +90,13 @@ pip install "llvmlite==0.42.0"
 pip install -r requirements.txt
 ```
 
-#### 🛠️ Fix for `ModuleNotFoundError: No module named 'whisper'`
+#### Fix for `ModuleNotFoundError: No module named 'whisper'`
 If you see this error even after installing requirements:
 1. **Uninstall duplicates**: `pip uninstall whisper` (this is a different package)
 2. **Reinstall correct package**: `pip install openai-whisper`
 3. **Check environment**: Ensure you are running `python` from the same environment where you ran `pip install`.
 
-#### ✅ Verify Installation
+#### Verify Installation
 After installing dependencies, verify everything is ready:
 ```bash
 python -c "import torch; import whisper; import vosk; import pptx; print('✅ All dependencies installed!')"
