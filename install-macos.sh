@@ -82,8 +82,12 @@ fi
 if ! xcode-select -p &> /dev/null; then
     print_info "Installing Xcode Command Line Tools..."
     xcode-select --install
-    print_warning "Please complete Xcode Command Line Tools installation and press Enter to continue..."
-    read -p ""
+    if [ -z "$NON_INTERACTIVE" ]; then
+        print_warning "Please complete Xcode Command Line Tools installation and press Enter to continue..."
+        read -p ""
+    else
+        print_warning "Xcode Command Line Tools installation started non-interactively"
+    fi
 else
     print_status "Xcode Command Line Tools detected"
 fi
