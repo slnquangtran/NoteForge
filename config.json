@@ -1,3 +1,4 @@
 {
-    "whisper_model_size": "large"
+    "whisper_model_size": "base",
+    "bart_model_name": "facebook/bart-large-cnn"
 }

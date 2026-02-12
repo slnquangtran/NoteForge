@@ -1,19 +1,43 @@
-customtkinter
-sounddevice
-numpy<2.0.0
-vosk==0.3.44
-openai-whisper
-webrtcvad-wheels
-Pillow
-transformers>=4.30.0
-torch>=2.0.0
-sentencepiece
-psutil
-tqdm
-requests
-python-pptx
-reportlab
-huggingface-hub
+# NoteForge Requirements - Windows/Linux
+# Strict version pinning for maximum compatibility
+
+# GUI Framework
+customtkinter==5.2.2
+
+# Audio Processing
+sounddevice==0.4.6
+numpy>=1.21.0,<2.0.0
+
+# Speech Recognition
+vosk==0.3.45
+openai-whisper==20231106
+
+# Image Processing
+Pillow==10.1.0
+
+# ML/AI Libraries
+torch==2.1.0
+transformers==4.35.2
+sentencepiece==0.1.99
+psutil==5.9.7
+
+# Progress Bars & Downloads
+tqdm==4.66.1
+requests==2.31.0
+
+# Document Processing
+python-pptx==0.6.23
+reportlab==4.0.7
+
+# Hugging Face
+huggingface-hub==0.20.2
+
+# LLVM and Rust (pinned for macOS compatibility)
 llvmlite==0.42.0
-setuptools-rust
-nltk
+setuptools-rust==1.9.0
+
+# Natural Language Processing
+nltk==3.8.1
+
+# WebRTC VAD (use webrtcvad-wheels on Windows/Linux)
+webrtcvad-wheels==2.0.10

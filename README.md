@@ -39,17 +39,22 @@ cd NoteForge
 ```
 
 ### 2. macOS Prerequisites (Install FIRST)
+**⚠️ IMPORTANT: macOS users should see the dedicated [macOS Installation Guide](MAC_INSTALLATION.md) for step-by-step instructions.**
+
 If you're on macOS, install system dependencies **before** Python packages:
+
 ```bash
-# Install Homebrew (if not already installed)
+# Quick install (recommended)
+chmod +x install-macos.sh
+./install-macos.sh
+
+# Or install system dependencies manually
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install system dependencies
 brew install portaudio llvm
-
-# Install Xcode Command Line Tools
 xcode-select --install
 ```
+
+**Python 3.12 is recommended for best macOS compatibility.** See [MAC_INSTALLATION.md](MAC_INSTALLATION.md) for detailed instructions including pre-flight checks.
 
 ### 3. Install Python Dependencies
 ```bash
@@ -68,6 +73,8 @@ python install_check.py
 You should see `✅ All dependencies installed!` before proceeding.
 
 ### 5. Troubleshooting (macOS)
+**📖 For comprehensive macOS troubleshooting, see [MAC_INSTALLATION.md](MAC_INSTALLATION.md)**
+
 If you encounter **"Failed to build wheel"** or **"PortAudio not found"** errors on Mac, follow these steps:
 1.  **Install Homebrew**: [/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"](https://brew.sh)
 2.  **Install System Deps**: `brew install portaudio llvm`

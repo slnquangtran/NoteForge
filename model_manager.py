@@ -5,6 +5,7 @@ import hashlib
 import requests
 import gc
 import json
+import sys
 from typing import Dict, Any, Optional
 from tqdm import tqdm
 
@@ -13,7 +14,18 @@ try:
 except ImportError:
     torch = None
 
-from utils.logger import setup_logger
+try:
+    from utils.logger import setup_logger
+except ImportError:
+    def setup_logger(name: str = "ModelManager"):
+        import logging
+        logger = logging.getLogger(name)
+        if not logger.handlers:
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+        return logger
 
 logger = setup_logger("ModelManager")
 

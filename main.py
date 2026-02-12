@@ -1,11 +1,26 @@
 import customtkinter as ctk
 import os
 import sys
+import platform
 from PIL import Image
 import config_manager
 import queue 
 import threading
 import time
+
+# --- Import Mac Compatibility Module ---
+try:
+    from macos_compat import (
+        get_platform_info,
+        check_python_version,
+        check_macos_deps,
+        validate_installation,
+        get_installation_instructions,
+        patch_sounddevice_for_macos
+    )
+    MACOS_COMPAT_AVAILABLE = True
+except ImportError:
+    MACOS_COMPAT_AVAILABLE = False
 
 # --- Import Modules ---
 try:
@@ -24,14 +39,57 @@ except ImportError as e:
 if HybridTranscriberApp is None or StudyAssistantGUI is None:
     print("\n⚠️  MISSING DEPENDENCIES DETECTED")
     print("Please ensure all dependencies are installed:")
-    print("  pip install -r requirements.txt")
+    
+    # Detect platform and provide appropriate instructions
+    system = platform.system()
+    
+    if system == "Darwin":  # macOS
+        print("  🍎 macOS detected.")
+        
+        # Check if macos_compat module is available
+        if MACOS_COMPAT_AVAILABLE:
+            # Run installation validation
+            is_valid, issues = validate_installation()
+            
+            if not is_valid:
+                print("\n  🔧 Pre-flight check results:")
+                for issue in issues:
+                    print(f"     - {issue}")
+            
+            # Get installation instructions
+            instructions = get_installation_instructions()
+            print(f"\n  🖥️  Platform: {instructions['platform']}")
+            print(f"  📌 Python Recommendation: {instructions['python_recommendation']}")
+            print(f"  🔥 PyTorch Backend: {instructions['pytorch_backend']}")
+            
+            print("\n  📋 Installation steps:")
+            for i, step in enumerate(instructions['steps'], 1):
+                print(f"     {i}. {step}")
+        else:
+            print("  Use the macOS installation script:")
+            print("    chmod +x install-macos.sh")
+            print("    ./install-macos.sh")
+        
+        print("\n  💡 macOS-specific tips:")
+        print("    - Ensure Xcode Command Line Tools are installed: xcode-select --install")
+        print("    - Use Python 3.12 from python.org or Homebrew for best compatibility")
+        print("    - Grant microphone permissions in System Preferences > Privacy & Security")
+        print("    - Run 'python check-macos-deps.py' before installation to verify your system")
+        print("    - See README-macos.md for detailed instructions")
+        print()
+        
+    else:
+        print("  pip install -r requirements.txt")
+    
     print("\nTo verify installation, run:")
     print("  python -c \"import torch; import whisper; import vosk; import pptx; print('✅ All dependencies installed!')\"")
     print()
-
 class MainMenuApp(ctk.CTk): 
     def __init__(self):
         super().__init__()
+
+        # --- macOS Specific Setup ---
+        self._setup_macos_compat()
 
         # --- Window Setup ---
         self.title("NoteForge")
@@ -57,6 +115,19 @@ class MainMenuApp(ctk.CTk):
         
         # Start download in background
         self.start_model_download()
+    
+    def _setup_macos_compat(self):
+        """Set up macOS-specific compatibility features."""
+        if platform.system() == "Darwin" and MACOS_COMPAT_AVAILABLE:
+            # Apply sounddevice patches for macOS
+            patch_sounddevice_for_macos()
+            
+            # Check Python version and warn if not optimal
+            is_compat, message = check_python_version()
+            if not is_compat:
+                print(f"\n⚠️  {message}")
+                print("   Python 3.12 is recommended for best macOS compatibility.")
+                print("   Consider upgrading: https://python.org/downloads/\n")
 
     def init_loading_ui(self):
         """Initializes the loading screen widgets."""
