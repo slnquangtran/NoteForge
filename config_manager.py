@@ -1,53 +1,26 @@
-import json
+# Wrapper for the new package-based config system
+import sys
 import os
+
+# Ensure src is in path for standalone execution/legacy imports
+repo_root = os.path.dirname(os.path.abspath(__file__))
+src_path = os.path.join(repo_root, "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+from noteforge.config.settings import load_settings, save_settings, get_setting, set_setting, DEFAULT_SETTINGS
+from noteforge.config.paths import get_config_file, get_whisper_cache_dir, get_vosk_model_dir
+
 import shutil
 import platform
-import subprocess
 import requests
 import zipfile
 try:
     import whisper
 except ImportError:
-    # We'll handle this in the app if it fails, but for now we need a placeholder or just re-raise with better msg
     whisper = None
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
-
-DEFAULT_SETTINGS = {
-    "whisper_model_size": "base",
-    "bart_model_name": "facebook/bart-large-cnn",
-}
-
-def load_settings():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            try:
-                settings = json.load(f)
-                return {**DEFAULT_SETTINGS, **settings}
-            except json.JSONDecodeError:
-                print("Error reading config.json, using default settings.")
-                return DEFAULT_SETTINGS
-    return DEFAULT_SETTINGS
-
-def save_settings(settings):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(settings, f, indent=4)
-
-def set_setting(key, value):
-    settings = load_settings()
-    settings[key] = value
-    save_settings(settings)
-
-def get_setting(key, default=None):
-    settings = load_settings()
-    # simple validation for whisper model size
-    if key == "whisper_model_size":
-        val = settings.get(key, DEFAULT_SETTINGS.get(key))
-        if val not in ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"]:
-            return "base"
-        return val
-        
-    return settings.get(key, default if default is not None else DEFAULT_SETTINGS.get(key))
+CONFIG_FILE = get_config_file()
 
 def validate_config():
     """Ensures config file has valid keys/values."""
@@ -62,15 +35,6 @@ def validate_config():
             
     if changed:
         save_settings(settings)
-
-
-def get_whisper_cache_dir():
-    # Attempt to find Whisper's default cache directory
-    # This logic is based on common XDG_CACHE_HOME usage and Whisper's default behavior
-    if platform.system() == "Windows":
-        return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local"), "Whisper", "models")
-    else: # Linux, macOS
-        return os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache"), "whisper")
 
 def delete_models(whisper_model_size_to_delete=None):
     success_vosk = False
