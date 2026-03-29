@@ -33,6 +33,11 @@ def save_settings(settings):
     with open(CONFIG_FILE, "w") as f:
         json.dump(settings, f, indent=4)
 
+def set_setting(key, value):
+    settings = load_settings()
+    settings[key] = value
+    save_settings(settings)
+
 def get_setting(key, default=None):
     settings = load_settings()
     # simple validation for whisper model size

@@ -305,7 +305,7 @@ class MainMenuApp(ctk.CTk):
         # --- 4. FOOTER ---
         self.footer_label = ctk.CTkLabel(
             self.main_bg,
-            text="v2.1 AI Edition | Powered by Vosk, Whisper & Spacy",
+            text="v2.1 AI Edition | Powered by Vosk, Whisper & NLTK",
             font=("Segoe UI", 12),
             text_color="gray",
             fg_color="transparent"

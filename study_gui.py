@@ -216,8 +216,8 @@ class StudyAssistantGUI(ctk.CTkToplevel):
         if not self.assistant: return
         
         def update_status(msg, progress=0):
-            self.status_var.set(msg)
-            self.progress_bar.set(progress)
+            self.after(0, lambda: self.status_var.set(msg))
+            self.after(0, lambda: self.progress_bar.set(progress))
             
             # If it's a "thought", add it to the thoughts box
             if msg.startswith("AI Thought:"):

@@ -189,8 +189,8 @@ class LectureNoteGenerator:
             try:
                 inputs = self.tokenizer(input_texts, max_length=1024, return_tensors="pt", truncation=True, padding=True)
                 input_ids = inputs["input_ids"]
-                if self.device >= 0:
-                    input_ids = input_ids.to(f"cuda:{self.device}")
+                if self.device != "cpu":
+                    input_ids = input_ids.to(self.device)
                 
                 summary_ids = self.model.generate(input_ids, num_beams=4, max_length=max_length, min_length=min_length, early_stopping=True)
                 return [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in summary_ids]
@@ -528,11 +528,19 @@ class LectureNoteGenerator:
         lines = notes_text.split('\n')
         
         for line in lines:
-            if line.startswith('TOPIC:'):
+            if line.startswith('###'):
                 story.append(Spacer(1, 12))
-                story.append(Paragraph(line, styles['Heading1']))
-            elif line.startswith(('DEFINITIONS:', 'LEGAL RULES:', 'KEY CASES:', 'EXCEPTIONS:', 'EXAMPLES:')):
-                story.append(Paragraph(f"<b>{line}</b>", styles['Heading2']))
+                story.append(Paragraph(line.replace('###', '').strip(), styles['Heading1']))
+            elif line.startswith('- **'):
+                header_text = re.search(r'\*\*(.*?)\*\*', line)
+                if header_text:
+                    label = header_text.group(1)
+                    content = line.split('**:', 1)[-1].strip()
+                    story.append(Paragraph(f"<b>{label}</b>", styles['Heading2']))
+                    if content:
+                        story.append(Paragraph(content, styles['Normal']))
+                else:
+                    story.append(Paragraph(line, styles['Normal']))
             elif line.strip():
                 story.append(Paragraph(line, styles['Normal']))
                 story.append(Spacer(1, 4))
