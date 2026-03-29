@@ -99,17 +99,6 @@ class HybridTranscriberApp(ctk.CTkToplevel):
     def get_available_devices(self):
         # Compatibility wrapper
         self.devices_list = self.recorder.get_devices()
-            default_input_index = sd.default.device[0] # sd.default.device returns (input_device_index, output_device_index)
-            
-            devices = sd.query_devices()
-            for i, dev in enumerate(devices):
-                if dev['max_input_channels'] > 0:
-                    name = dev['name']
-                    is_def = " (Default)" if i == default_input_index else ""
-                    self.devices_list.append((i, f"{i}: {name}{is_def}"))
-        except Exception as e:
-            print(f"Error getting audio devices: {e}")
-            self.devices_list = [(None, "Default Device")]
 
     def _find_model_path(self):
         """Search for the Vosk model in multiple logical locations"""
