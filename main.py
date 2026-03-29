@@ -1,26 +1,16 @@
-import customtkinter as ctk
-import os
 import sys
-import platform
-from PIL import Image
-import config_manager
-import queue 
-import threading
-import time
+import os
 
-# --- Import Mac Compatibility Module ---
-try:
-    from macos_compat import (
-        get_platform_info,
-        check_python_version,
-        check_macos_deps,
-        validate_installation,
-        get_installation_instructions,
-        patch_sounddevice_for_macos
-    )
-    MACOS_COMPAT_AVAILABLE = True
-except ImportError:
-    MACOS_COMPAT_AVAILABLE = False
+# Ensure src is in python path
+repo_root = os.path.dirname(os.path.abspath(__file__))
+src_path = os.path.join(repo_root, "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+from noteforge.main import main
+
+if __name__ == "__main__":
+    main()
 
 # --- Import Modules ---
 try:
@@ -305,7 +295,7 @@ class MainMenuApp(ctk.CTk):
         # --- 4. FOOTER ---
         self.footer_label = ctk.CTkLabel(
             self.main_bg,
-            text="v2.1 AI Edition | Powered by Vosk, Whisper & Spacy",
+            text="v2.1 AI Edition | Powered by Vosk, Whisper & NLTK",
             font=("Segoe UI", 12),
             text_color="gray",
             fg_color="transparent"
