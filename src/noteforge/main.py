@@ -1,21 +1,14 @@
 import customtkinter as ctk
-import os
-import sys
-import platform
 import queue 
 import threading
-import time
+import os
+import sys
+
+# Ensure proper package imports work
 from .config import settings
 from .models.manager import ModelManager
-
-# --- Lazy Imports for Sub-apps ---
-def get_transcriber_app():
-    from app import HybridTranscriberApp
-    return HybridTranscriberApp
-
-def get_study_gui():
-    from study_gui import StudyAssistantGUI
-    return StudyAssistantGUI
+from .gui.transcription import HybridTranscriberApp
+from .gui.study import StudyAssistantGUI
 
 class NoteForgeLauncher(ctk.CTk): 
     """Main entrypoint UI for NoteForge."""
@@ -38,7 +31,6 @@ class NoteForgeLauncher(ctk.CTk):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue") 
         
-        self.current_child = None
         self.gui_update_queue = queue.Queue()
 
         # Start cleanly with the Loading UI
@@ -63,7 +55,6 @@ class NoteForgeLauncher(ctk.CTk):
 
     def start_model_download(self):
         def download_thread_target():
-            # Use the new ModelManager for centralized checks
             try:
                 # Check/Download Vosk
                 self.queue_gui_update("Ensuring Vosk model...", 0.2)
@@ -124,30 +115,25 @@ class NoteForgeLauncher(ctk.CTk):
         btn_frame = ctk.CTkFrame(self.main_bg, fg_color="#48426D", corner_radius=30)
         btn_frame.place(relx=0.5, rely=0.6, anchor="center")
         
-        # Buttons
         ctk.CTkButton(btn_frame, text="🎤 Transcription", command=self.open_transcriber, width=300, height=50).pack(pady=10, padx=20)
         ctk.CTkButton(btn_frame, text="📝 Study Assistant", command=self.open_study, width=300, height=50).pack(pady=10, padx=20)
         ctk.CTkButton(btn_frame, text="❌ Exit", command=self.destroy, width=300, height=50, fg_color="gray").pack(pady=10, padx=20)
 
-        ctk.CTkLabel(self.main_bg, text="v3.0 Modular Alpha", text_color="gray").place(relx=0.5, rely=0.95, anchor="center")
+        ctk.CTkLabel(self.main_bg, text="v3.0 Modular", text_color="gray").place(relx=0.5, rely=0.95, anchor="center")
 
     def open_transcriber(self):
-        app_cls = get_transcriber_app()
-        if app_cls:
-            self.withdraw()
-            child = app_cls(self)
-            self._setup_child(child)
+        self.withdraw()
+        child = HybridTranscriberApp(self)
+        child.protocol("WM_DELETE_WINDOW", lambda: [child.destroy(), self.deiconify()])
 
     def open_study(self):
-        app_cls = get_study_gui()
-        if app_cls:
-            self.withdraw()
-            child = app_cls(self)
-            self._setup_child(child)
-
-    def _setup_child(self, child):
+        self.withdraw()
+        child = StudyAssistantGUI(self)
         child.protocol("WM_DELETE_WINDOW", lambda: [child.destroy(), self.deiconify()])
 
 def main():
     app = NoteForgeLauncher()
     app.mainloop()
+
+if __name__ == "__main__":
+    main()
