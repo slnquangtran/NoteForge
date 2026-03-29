@@ -111,8 +111,22 @@ If you see any `ModuleNotFoundError`, reinstall that specific package or run `pi
 
 ### 7. Launch NoteForge
 ```bash
+# Recommended (Package Launch)
 python main.py
+
+# Or via installed script (if pip installed -e .)
+noteforge
 ```
 *Models will be downloaded automatically on the first run. The app will detect your hardware (CUDA/MPS/CPU) and optimize performance accordingly.*
+
+## Architecture (v3.0+)
+NoteForge has been refactored from a monolithic script into a modular package-based architecture:
+- `src/noteforge/config/`: Centralized settings and path management.
+- `src/noteforge/models/`: Unified model registry and lifecycle management.
+- `src/noteforge/transcription/`: Decoupled transcription engine and audio processing.
+- `src/noteforge/study/`: Extracted note generation and PDF export services.
+- `tests/`: Smoke tests for core modular components.
+
+Legacy root-level scripts (`app.py`, `study_assistant.py`, `model_manager.py`) are now thin compatibility wrappers for the `noteforge` package.
 
 
