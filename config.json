@@ -1,4 +1,5 @@
 {
     "whisper_model_size": "base",
-    "bart_model_name": "facebook/bart-large-cnn"
+    "bart_model_name": "facebook/bart-large-cnn",
+    "test_key": "test_value"
 }

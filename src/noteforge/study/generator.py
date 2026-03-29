@@ -7,6 +7,15 @@ class StudyGenerator:
     """Handles parsing and AI summarization for study guides."""
     def __init__(self):
         self._bart_pipeline = None
+        self.topic_keywords = {
+            'Offer and Acceptance': ['offer', 'acceptance', 'invitation to treat', 'postal rule', 'unilateral contract'],
+            'Consideration': ['consideration', 'benefit', 'detriment', 'sufficient', 'adequate', 'past consideration'],
+            'Promissory Estoppel': ['estoppel', 'promissory estoppel', 'shield not sword', 'equitable'],
+            'Intention to Create Legal Relations': ['intention', 'legal relations', 'domestic', 'commercial'],
+            'Certainty of Terms': ['certainty', 'vague', 'uncertain', 'agreement to agree'],
+            'Capacity': ['capacity', 'minor', 'mental incapacity', 'intoxication'],
+            'Privity of Contract': ['privity', 'third party', 'rights of third parties']
+        }
 
     def process_file(self, filepath: str, progress_callback=None) -> Dict[str, Any]:
         """Parses a file and generates notes."""
