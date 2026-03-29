@@ -3,19 +3,21 @@ from tkinter import filedialog, messagebox
 import threading
 import os
 
-# Import Logic
+# Ensure src is in path
+import sys
+import os
+repo_root = os.path.dirname(os.path.abspath(__file__))
+src_path = os.path.join(repo_root, "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
 try:
-    from study_assistant import LectureNoteGenerator
+    from noteforge.study.generator import StudyGenerator as LectureNoteGenerator
 except ImportError:
-    # Handle folder name conflict by importing the file directly
-    import importlib.util
-    import os
-    if os.path.exists("study_assistant.py"):
-        spec = importlib.util.spec_from_file_location("study_assistant_mod", "study_assistant.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        LectureNoteGenerator = mod.LectureNoteGenerator
-    else:
+    # Legacy fallback (though we want to move away from this)
+    try:
+        from study_assistant import LectureNoteGenerator
+    except ImportError:
         LectureNoteGenerator = None
 
 class StudyAssistantGUI(ctk.CTkToplevel):
